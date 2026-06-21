@@ -261,7 +261,7 @@ graph TD
 
 - Установленные **Terraform** (>=1.0), **Ansible** (>=2.9), **Yandex Cloud CLI**.
 - Настроенный профиль Yandex Cloud с правами на создание ресурсов.
-- Сервисный аккаунт с авторизованным ключом (путь к ключу указан в `terraform.tfvars`).
+- Сервисный аккаунт с авторизованным ключом (путь к ключу указан в `terraform.tfvars`).Шаблон [MindMaze74/diplom-project](https://github.com/MindMaze74/diplom-project/blob/main/terraform/terraform.tfvars.example)
 - SSH-ключи на локальной машине (`~/.ssh/diplom` и `~/.ssh/diplom.pub`).
 
 ### Шаги по развёртыванию

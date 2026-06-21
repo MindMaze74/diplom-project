@@ -1,0 +1,27 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+
+# SSH keys
+**/.ssh/
+**/*.pem
+**/*.key
+**/*.pub
+
+# Ansible
+ansible/inventory/inventory.ini
+ansible/.ansible/
+/tmp/ansible_cache
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

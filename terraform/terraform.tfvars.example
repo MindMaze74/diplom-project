@@ -1,0 +1,12 @@
+# ПРИМЕР КОНФИГУРАЦИОННОГО ФАЙЛА
+
+
+yc_cloud_id  = "id облака"
+yc_folder_id = "id папки"
+
+# Путь к ключу сервисного аккаунта
+service_account_key_file = "~/diplom-sa-key.json"
+
+# Пути к SSH-ключам (созданы локально)
+ssh_public_key_path  = "~/.ssh/diplom.pub"
+ssh_private_key_path = "~/.ssh/diplom"

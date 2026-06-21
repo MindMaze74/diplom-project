@@ -64,7 +64,7 @@
 
 ### Сеть
 
-- Развернут один VPC (`diplom-test-network`).
+- Развернут один VPC (`diplom-project-network`).
 - Сервера web, Prometheus, Elasticsearch помещены в приватные подсети.
 - Сервера Grafana и Kibana размещены в приватных подсетях, а Bastion — в публичной для обеспечения единственной точки входа.
 - Настроены Security Groups для соответствующих сервисов на входящий трафик только к нужным портам.
@@ -146,7 +146,7 @@
 | **Ansible** | >= 2.9 | Настройка ВМ: установка Docker, запуск контейнеров, настройка экспортеров, Filebeat, сервисов мониторинга и логирования. | Используется динамический инвентарь, генерируемый Terraform. |
 | **Docker** | Latest | Изоляция сервисов. | Все сервисы запущены в контейнерах: nginx, node-exporter, nginx-log-exporter, filebeat, prometheus, grafana, elasticsearch, kibana. |
 | **Yandex Cloud CLI** | Latest | Создание сервисного аккаунта и авторизованного ключа, диагностика ресурсов. | Используется для ручных проверок и создания ключей. |
-| **Git** | – | Управление версиями кода. | Репозиторий на GitHub: [MindMaze74/test_for_dip](https://github.com/MindMaze74/test_for_dip). |
+| **Git** | – | Управление версиями кода. | Репозиторий на GitHub: [MindMaze74/diplom-project](https://github.com/MindMaze74/diplom-project). |
 
 ---
 
@@ -268,8 +268,8 @@ graph TD
 
 1.  **Клонировать репозиторий**:
     ```bash
-    git clone https://github.com/MindMaze74/test_for_dip.git
-    cd test_for_dip
+    git clone https://github.com/MindMaze74/diplom-project.git
+    cd diplom-project
     ```
 
 2.  **Настроить переменные Terraform**:

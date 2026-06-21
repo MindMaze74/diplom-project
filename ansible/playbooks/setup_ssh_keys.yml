@@ -1,0 +1,107 @@
+---
+# ============================================================
+# ПЛЕЙБУК: НАСТРОЙКА SSH-КЛЮЧЕЙ
+# ============================================================
+# 1. Копирует приватный ключ с локальной машины на Bastion
+# 2. Распространяет публичный ключ на все ВМ
+# ============================================================
+
+- name: Setup SSH keys on Bastion
+  hosts: bastion
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Copy private SSH key from control node to Bastion
+      copy:
+        src: "{{ lookup('env', 'HOME') }}/.ssh/diplom"
+        dest: /home/ubuntu/.ssh/id_rsa
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
+
+    - name: Copy public SSH key from control node to Bastion
+      copy:
+        src: "{{ lookup('env', 'HOME') }}/.ssh/diplom.pub"
+        dest: /home/ubuntu/.ssh/id_rsa.pub
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Copy SSH key to web1
+      shell: |
+        ssh-copy-id -i /home/ubuntu/.ssh/id_rsa.pub -o StrictHostKeyChecking=no ubuntu@{{ web1_private_ip }} 2>/dev/null && echo "✅ web1 OK" || echo "❌ web1 FAILED"
+      args:
+        executable: /bin/bash
+      register: web1_result
+      changed_when: "'OK' in web1_result.stdout"
+      ignore_errors: yes
+
+    - name: Copy SSH key to web2
+      shell: |
+        ssh-copy-id -i /home/ubuntu/.ssh/id_rsa.pub -o StrictHostKeyChecking=no ubuntu@{{ web2_private_ip }} 2>/dev/null && echo "✅ web2 OK" || echo "❌ web2 FAILED"
+      args:
+        executable: /bin/bash
+      register: web2_result
+      changed_when: "'OK' in web2_result.stdout"
+      ignore_errors: yes
+
+    - name: Copy SSH key to prometheus
+      shell: |
+        ssh-copy-id -i /home/ubuntu/.ssh/id_rsa.pub -o StrictHostKeyChecking=no ubuntu@{{ prometheus_private_ip }} 2>/dev/null && echo "✅ prometheus OK" || echo "❌ prometheus FAILED"
+      args:
+        executable: /bin/bash
+      register: prometheus_result
+      changed_when: "'OK' in prometheus_result.stdout"
+      ignore_errors: yes
+
+    - name: Copy SSH key to grafana
+      shell: |
+        ssh-copy-id -i /home/ubuntu/.ssh/id_rsa.pub -o StrictHostKeyChecking=no ubuntu@{{ grafana_private_ip }} 2>/dev/null && echo "✅ grafana OK" || echo "❌ grafana FAILED"
+      args:
+        executable: /bin/bash
+      register: grafana_result
+      changed_when: "'OK' in grafana_result.stdout"
+      ignore_errors: yes
+
+    - name: Copy SSH key to elasticsearch
+      shell: |
+        ssh-copy-id -i /home/ubuntu/.ssh/id_rsa.pub -o StrictHostKeyChecking=no ubuntu@{{ elasticsearch_private_ip }} 2>/dev/null && echo "✅ elasticsearch OK" || echo "❌ elasticsearch FAILED"
+      args:
+        executable: /bin/bash
+      register: elasticsearch_result
+      changed_when: "'OK' in elasticsearch_result.stdout"
+      ignore_errors: yes
+
+    - name: Copy SSH key to kibana
+      shell: |
+        ssh-copy-id -i /home/ubuntu/.ssh/id_rsa.pub -o StrictHostKeyChecking=no ubuntu@{{ kibana_private_ip }} 2>/dev/null && echo "✅ kibana OK" || echo "❌ kibana FAILED"
+      args:
+        executable: /bin/bash
+      register: kibana_result
+      changed_when: "'OK' in kibana_result.stdout"
+      ignore_errors: yes
+
+    - name: Show copy results
+      debug:
+        msg:
+          - "web1: {{ web1_result.stdout | default('failed') }}"
+          - "web2: {{ web2_result.stdout | default('failed') }}"
+          - "prometheus: {{ prometheus_result.stdout | default('failed') }}"
+          - "grafana: {{ grafana_result.stdout | default('failed') }}"
+          - "elasticsearch: {{ elasticsearch_result.stdout | default('failed') }}"
+          - "kibana: {{ kibana_result.stdout | default('failed') }}"
+
+    - name: Verify SSH access to all VMs
+      shell: |
+        for ip in {{ web1_private_ip }} {{ web2_private_ip }} {{ prometheus_private_ip }} {{ grafana_private_ip }} {{ elasticsearch_private_ip }} {{ kibana_private_ip }}; do
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /home/ubuntu/.ssh/id_rsa ubuntu@$ip "hostname" 2>/dev/null && echo "✅ $ip OK" || echo "❌ $ip FAILED"
+        done
+      args:
+        executable: /bin/bash
+      register: ssh_verify
+      changed_when: false
+
+    - name: Show SSH verification results
+      debug:
+        msg: "{{ ssh_verify.stdout_lines }}"

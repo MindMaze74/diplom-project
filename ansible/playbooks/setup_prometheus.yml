@@ -1,0 +1,28 @@
+---
+- name: Setup Prometheus
+  hosts: prometheus
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Create prometheus directory
+      file:
+        path: /opt/prometheus
+        state: directory
+        mode: '0755'
+
+    - name: Deploy prometheus config with extended targets
+      template:
+        src: ../templates/prometheus.yml.j2
+        dest: /opt/prometheus/prometheus.yml
+
+    - name: Run prometheus container
+      docker_container:
+        name: prometheus
+        image: prom/prometheus:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "9090:9090"
+        volumes:
+          - /opt/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml

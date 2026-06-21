@@ -1,0 +1,32 @@
+---
+- name: Setup Kibana
+  hosts: kibana
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Run kibana container
+      docker_container:
+        name: kibana
+        image: docker.elastic.co/kibana/kibana:8.17.0
+        state: started
+        restart_policy: always
+        ports:
+          - "5601:5601"
+        env:
+          ELASTICSEARCH_HOSTS: "http://{{ elasticsearch_private_ip }}:9200"
+
+    - name: Wait for Kibana to be ready
+      uri:
+        url: "http://localhost:5601"
+        status_code: 200
+        timeout: 10
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 10
+      ignore_errors: yes
+
+    - name: Show Kibana status
+      debug:
+        msg: "Kibana on {{ inventory_hostname }} is {{ 'ready' if result.status == 200 else 'not ready' }}"

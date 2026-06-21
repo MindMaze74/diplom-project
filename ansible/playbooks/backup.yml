@@ -1,0 +1,52 @@
+---
+- name: Setup free backup via rsync
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Install rsync
+      apt:
+        name: rsync
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Create backup directory on Bastion
+      file:
+        path: /opt/backup
+        state: directory
+        mode: '0755'
+      delegate_to: bastion
+      run_once: true
+
+    - name: Create backup script
+      copy:
+        dest: /usr/local/bin/backup.sh
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          #Бэкап через rsync
+          BACKUP_DIR="/opt/backup/$(hostname)/$(date +%Y%m%d)"
+          mkdir -p $BACKUP_DIR
+
+          # Копируем важные конфигурационные файлы и логи
+          rsync -av --delete /etc/ $BACKUP_DIR/etc/
+          rsync -av --delete /var/log/ $BACKUP_DIR/var/log/
+          rsync -av --delete /opt/ $BACKUP_DIR/opt/
+          rsync -av --delete /home/ubuntu/ $BACKUP_DIR/home/
+
+          # Создаём символическую ссылку на последний бэкап
+          ln -sfn $BACKUP_DIR /opt/backup/$(hostname)/latest
+
+          # Очищаем бэкапы старше 7 дней
+          find /opt/backup/$(hostname) -type d -name "20*" -mtime +7 -exec rm -rf {} \; 2>/dev/null
+
+          echo "Backup completed for $(hostname) at $(date)" >> /var/log/backup.log
+
+    - name: Add cron job for daily backup at 2am
+      cron:
+        name: "Daily backup"
+        minute: "0"
+        hour: "2"
+        job: "/usr/local/bin/backup.sh"
+        state: present

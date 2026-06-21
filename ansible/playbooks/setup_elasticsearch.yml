@@ -1,0 +1,58 @@
+---
+- name: Setup Elasticsearch
+  hosts: elasticsearch
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Create elasticsearch directory with correct permissions
+      file:
+        path: /opt/elasticsearch
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: '0755'
+
+    - name: Remove old elasticsearch container if exists
+      docker_container:
+        name: elasticsearch
+        state: absent
+
+    - name: Increase vm.max_map_count
+      sysctl:
+        name: vm.max_map_count
+        value: '262144'
+        state: present
+        reload: yes
+
+    - name: Run elasticsearch container
+      docker_container:
+        name: elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+        state: started
+        restart_policy: always
+        ports:
+          - "9200:9200"
+          - "9300:9300"
+        env:
+          discovery.type: "single-node"
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+        volumes:
+          - /opt/elasticsearch:/usr/share/elasticsearch/data
+        user: "1000:1000"
+
+    - name: Wait for Elasticsearch to be ready
+      uri:
+        url: "http://localhost:9200"
+        status_code: 200
+        timeout: 10
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 5
+      ignore_errors: yes
+
+    - name: Show Elasticsearch status
+      debug:
+        msg: "Elasticsearch on {{ inventory_hostname }} is {{ 'ready' if result.status == 200 else 'not ready' }}"

@@ -1,0 +1,228 @@
+---
+# Основной плейбук Ansible
+
+- name: Setup SSH keys on Bastion
+  import_playbook: setup_ssh_keys.yml
+
+- name: Setup complete infrastructure
+  hosts: all
+  gather_facts: yes
+  tags: always
+  tasks:
+    - name: Show inventory
+      debug:
+        msg: "Host: {{ inventory_hostname }} - IP: {{ ansible_default_ipv4.address }}"
+
+- name: Install Docker on all servers
+  hosts: all
+  become: yes
+  tags: docker
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install prerequisites
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - gnupg
+          - lsb-release
+        state: present
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        update_cache: yes
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Verify Docker installation
+      command: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: Show Docker version
+      debug:
+        msg: "Docker installed on {{ inventory_hostname }}: {{ docker_version.stdout }}"
+
+- name: Setup web servers
+  hosts: web
+  become: yes
+  tags: web
+  tasks:
+    - name: Create nginx directories
+      file:
+        path: "/opt/nginx/{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - html
+        - logs
+        - conf.d
+
+    - name: Deploy website
+      copy:
+        dest: /opt/nginx/html/index.html
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>Курсовая работа</title>
+            <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f0f0f0; }
+              h1 { color: #333; }
+              .server { color: #0066cc; font-weight: bold; }
+            </style>
+          </head>
+          <body>
+            <h1>Курсовая работа - Старцев Данила Антонович</h1>
+            <p>Сервер: <span class="server">{{ ansible_hostname }}</span></p>
+            <p>IP: <span class="server">{{ ansible_default_ipv4.address }}</span></p>
+          </body>
+          </html>
+
+    - name: Run nginx container
+      docker_container:
+        name: nginx
+        image: nginx:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "80:80"
+        volumes:
+          - /opt/nginx/html:/usr/share/nginx/html:ro
+          - /opt/nginx/logs:/var/log/nginx
+
+- name: Setup Prometheus
+  hosts: prometheus
+  become: yes
+  tags: prometheus
+  tasks:
+    - name: Create prometheus directory
+      file:
+        path: /opt/prometheus
+        state: directory
+        mode: '0755'
+
+    - name: Run prometheus container
+      docker_container:
+        name: prometheus
+        image: prom/prometheus:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "9090:9090"
+
+- name: Setup Grafana
+  hosts: grafana
+  become: yes
+  tags: grafana
+  tasks:
+    - name: Create grafana directory
+      file:
+        path: /opt/grafana
+        state: directory
+        mode: '0755'
+
+    - name: Run grafana container
+      docker_container:
+        name: grafana
+        image: grafana/grafana:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "3000:3000"
+        env:
+          GF_SECURITY_ADMIN_USER: "admin"
+          GF_SECURITY_ADMIN_PASSWORD: "admin"
+
+- name: Setup Elasticsearch
+  hosts: elasticsearch
+  become: yes
+  tags: elasticsearch
+  tasks:
+    - name: Create elasticsearch directory
+      file:
+        path: /opt/elasticsearch
+        state: directory
+        mode: '0755'
+
+    - name: Increase vm.max_map_count
+      sysctl:
+        name: vm.max_map_count
+        value: '262144'
+        state: present
+        reload: yes
+
+    - name: Run elasticsearch container
+      docker_container:
+        name: elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+        state: started
+        restart_policy: always
+        ports:
+          - "9200:9200"
+        env:
+          discovery.type: "single-node"
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+        volumes:
+          - /opt/elasticsearch:/usr/share/elasticsearch/data
+
+- name: Setup Kibana
+  hosts: kibana
+  become: yes
+  tags: kibana
+  tasks:
+    - name: Create kibana directory
+      file:
+        path: /opt/kibana
+        state: directory
+        mode: '0755'
+
+    - name: Run kibana container
+      docker_container:
+        name: kibana
+        image: docker.elastic.co/kibana/kibana:8.17.0
+        state: started
+        restart_policy: always
+        ports:
+          - "5601:5601"
+        volumes:
+          - /opt/kibana:/usr/share/kibana/data
+        env:
+          ELASTICSEARCH_HOSTS: "http://{{ elasticsearch_private_ip }}:9200"
+
+# Резервное копирование
+- import_playbook: backup.yml

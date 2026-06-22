@@ -91,13 +91,13 @@
 
 | Имя ВМ | Зона доступности | Роль | Публичный IP | Прерываемая |
 |--------|------------------|------|--------------|-------------|
-| `bastion` | `ru-central1-a` | SSH-шлюз, Nginx-прокси (балансировщик) | **Да** (единственный) | да |
-| `web1` | `ru-central1-a` | Веб-сервер (nginx в Docker) | Нет | да |
-| `web2` | `ru-central1-b` | Веб-сервер (nginx в Docker) | Нет | да |
-| `prometheus` | `ru-central1-a` | Сбор метрик (Prometheus в Docker) | Нет | да |
-| `grafana` | `ru-central1-a` | Визуализация (Grafana в Docker) | Нет | да |
-| `elasticsearch` | `ru-central1-a` | Хранилище логов (Elasticsearch в Docker) | Нет | да |
-| `kibana` | `ru-central1-a` | Просмотр логов (Kibana в Docker) | Нет | да |
+| `bastion` | `ru-central1-a` | SSH-шлюз, Nginx-прокси (балансировщик) | **Да** (единственный) | Да |
+| `web1` | `ru-central1-a` | Веб-сервер (nginx в Docker) | Нет | Да |
+| `web2` | `ru-central1-b` | Веб-сервер (nginx в Docker) | Нет | Да |
+| `prometheus` | `ru-central1-a` | Сбор метрик (Prometheus в Docker) | Нет | Да |
+| `grafana` | `ru-central1-a` | Визуализация (Grafana в Docker) | Нет | Да |
+| `elasticsearch` | `ru-central1-a` | Хранилище логов (Elasticsearch в Docker) | Нет | Да |
+| `kibana` | `ru-central1-a` | Просмотр логов (Kibana в Docker) | Нет | Да |
 
 > **Примечание:** Все ВМ используют **прерываемые** инстансы (`preemptible = true`), что позволяет экономить до 70% стоимости аренды. Это допустимо для курсовой работы, так как инфраструктура не является критичной к перезапускам.
 

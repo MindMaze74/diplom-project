@@ -317,7 +317,7 @@ graph TD
     ansible-playbook -i inventory/inventory.ini playbooks/site.yml
     ```
 
-### Доступ к сервисам
+#### Доступ к сервисам
 
 | Сервис | URL | Логин/Пароль |
 |--------|-----|--------------|
@@ -325,8 +325,7 @@ graph TD
 | **Grafana** | `http://<bastion_public_ip>:3000` | `admin` / `admin` |
 | **Kibana** | `http://<bastion_public_ip>:5601` | – (без аутентификации) |
 
->**Примечание:** Доступ к Grafana и Kibana осуществляется через прокси на Bastion, поэтому они используют его публичный IP-адрес.
-> Публичный IP Bastion можно получить из вывода Terraform:
+> Публичный IP Bastion можно получить командой:
 > ```bash
 > cd terraform
 > terraform output bastion_public_ip
@@ -389,15 +388,15 @@ yc iam key create --service-account-name diplom-sa --output ~/diplom-sa-key.json
 
 # Назначение роли editor на каталог
 yc resource-manager folder add-access-binding \
-  --id b1g4blc2guo29mqbh6bp \
+  --id <ваш_folder_id> \
   --role editor \
   --service-account-name diplom-sa
 
 # Список ВМ в каталоге
-yc compute instance list --folder-id b1g4blc2guo29mqbh6bp
+yc compute instance list --folder-id <ваш_folder_id>
 
 # Список публичных IP-адресов
-yc vpc address list --folder-id b1g4blc2guo29mqbh6bp
+yc vpc address list --folder-id <ваш_folder_id>
 ```
 
 ### Docker (на ВМ)
@@ -430,13 +429,13 @@ curl -v http://<bastion_public_ip>:3000
 curl -v http://<bastion_public_ip>:5601
 
 # Проверка Elasticsearch (внутренний доступ)
-curl http://10.0.1.33:9200
+curl http://ip-address:9200
 
 # Проверка метрик Nginx Log Exporter
-curl http://10.0.1.9:4040/metrics | grep nginx_http
+curl http://ip-address:4040/metrics | grep nginx_http
 
 # Проверка индексов в Elasticsearch (логи)
-curl http://10.0.1.33:9200/_cat/indices
+curl http://ip-address/_cat/indices
 ```
 
 ### Диагностика SSH-доступа через Bastion

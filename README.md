@@ -429,13 +429,13 @@ curl -v http://<bastion_public_ip>:3000
 curl -v http://<bastion_public_ip>:5601
 
 # Проверка Elasticsearch (внутренний доступ)
-curl http://ip-address:9200
+curl http://<ip-address>:9200
 
 # Проверка метрик Nginx Log Exporter
-curl http://ip-address:4040/metrics | grep nginx_http
+curl http://<ip-address>:4040/metrics | grep nginx_http
 
 # Проверка индексов в Elasticsearch (логи)
-curl http://ip-address/_cat/indices
+curl http://<ip-address>/_cat/indices
 ```
 
 ### Диагностика SSH-доступа через Bastion
@@ -444,10 +444,10 @@ curl http://ip-address/_cat/indices
 ssh -i ~/.ssh/diplom ubuntu@<bastion_public_ip>
 
 # Проверка доступа к web1
-ssh -i ~/.ssh/diplom ubuntu@10.0.1.4 "hostname"
+ssh -i ~/.ssh/diplom ubuntu@<ip-address> "hostname"
 
 # Копирование SSH-ключа на все ВМ
-ssh-copy-id -i ~/.ssh/diplom.pub ubuntu@10.0.1.4
+ssh-copy-id -i ~/.ssh/diplom.pub ubuntu@<ip-address>
 ```
 
 ### Резервное копирование (rsync)

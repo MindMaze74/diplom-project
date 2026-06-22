@@ -191,6 +191,7 @@ diplom-project
 ├── README.md
 ├── screen-instruction.md
 └── terraform
+    ├── bastion-cloud-init.yml
     ├── bastion.tf
     ├── instances.tf
     ├── network.tf
@@ -201,6 +202,8 @@ diplom-project
     │   ├── bastion-cloud-init.yml.tpl
     │   ├── cloud-init.yml.tpl
     │   └── inventory.tpl
+    ├── terraform.tfvars
+    ├── terraform.tfvars.example
     ├── timeouts.tf
     └── variables.tf
 ```

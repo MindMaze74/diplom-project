@@ -297,8 +297,8 @@ graph TD
 | **Grafana** | `http://<bastion_public_ip>:3000` | `admin` / `admin` |
 | **Kibana** | `http://<bastion_public_ip>:5601` | – (без аутентификации) |
 
-> Доступ к Grafana и Kibana осуществляется через прокси на Bastion, поэтому они используют его публичный IP-адрес.
-> **Примечание:** Публичный IP Bastion можно получить из вывода Terraform:
+>**Примечание:** Доступ к Grafana и Kibana осуществляется через прокси на Bastion, поэтому они используют его публичный IP-адрес.
+> Публичный IP Bastion можно получить из вывода Terraform:
 > ```bash
 > cd terraform
 > terraform output bastion_public_ip

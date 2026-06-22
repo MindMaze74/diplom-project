@@ -52,7 +52,7 @@
 - Grafana настроена на взаимодействие с Prometheus. Настроены дашборды с отображением метрик: Utilization, Saturation, Errors для CPU, RAM, дисков, сети, а также `http_response_count_total` и `http_response_size_bytes`. Добавлены необходимые пороговые значения (tresholds).
 
 > **Скриншот дашборда Grafana:**  
-> ![Grafana Dashboard](img/grafana-dashboard.png)
+> ![Grafana Dashboard](вставить изображение)
 
 ### Логи
 
@@ -61,7 +61,7 @@
 - Создана ВМ (`kibana`) для Kibana, сконфигурировано соединение с Elasticsearch.
 
 > **Скриншот Kibana:**  
-> ![Kibana](img/kibana.png)
+> ![Kibana](вставить изображение)
 
 ### Сеть
 

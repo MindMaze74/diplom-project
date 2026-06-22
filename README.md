@@ -19,6 +19,7 @@
 7. [Развёртывание](#развёртывание)
 8. [Доступ к сервисам](#доступ-к-сервисам)
 9. [Выводы](#выводы)
+10. [Полезные команды](#полезные-команды)
 
 ---
 
@@ -169,6 +170,8 @@
 | **Rsync** | Бесплатное резервное копирование важных файлов (ежедневно, хранение 7 дней). |
 | **Cron** | Планировщик для автоматического запуска бэкапа. |
 | **Nginx (на Bastion)** | Также выполняет роль балансировщика и прокси (отмечено выше). |
+
+
 
 ---
 
@@ -331,3 +334,149 @@ graph TD
 
 ### Вывод
 В результате работы спроектирована и реализована полностью автоматизированная инфраструктура, отвечающая требованиям курсового задания. Использование Terraform и Ansible обеспечивает воспроизводимость, а принятые компромиссы (единственный публичный IP, прокси на Bastion, прерываемые ВМ) являются разумными и обоснованными в условиях облачных квот и ограниченного бюджета.
+
+## Полезные команды
+
+### Terraform
+
+```bash
+# Инициализация проекта
+terraform init
+
+# Проверка синтаксиса и форматирование
+terraform validate
+terraform fmt
+
+# Просмотр плана изменений
+terraform plan
+
+# Развёртывание инфраструктуры (с ограничением параллельности для обхода квоты)
+terraform apply -parallelism=1
+
+# Удаление всей инфраструктуры
+terraform destroy -parallelism=1
+
+# Получение выходных данных (IP-адреса)
+terraform output bastion_public_ip
+terraform output web_private_ips
+```
+
+### Ansible
+```bash
+# Проверка синтаксиса плейбука
+ansible-playbook --syntax-check playbooks/site.yml
+
+# Запуск основного плейбука
+ansible-playbook -i inventory/inventory.ini playbooks/site.yml
+
+# Запуск конкретного плейбука (например, только для веб-серверов)
+ansible-playbook -i inventory/inventory.ini playbooks/setup_web_servers.yml --limit web1,web2
+
+# Запуск с тегом (например, только Docker)
+ansible-playbook -i inventory/inventory.ini playbooks/site.yml --tags docker
+
+# Просмотр инвентаря
+ansible-inventory -i inventory/inventory.ini --list
+```
+
+### Yandex Cloud CLI
+```bash
+# Создание сервисного аккаунта
+yc iam service-account create --name diplom-sa
+
+# Создание авторизованного ключа
+yc iam key create --service-account-name diplom-sa --output ~/diplom-sa-key.json
+
+# Назначение роли editor на каталог
+yc resource-manager folder add-access-binding \
+  --id b1g4blc2guo29mqbh6bp \
+  --role editor \
+  --service-account-name diplom-sa
+
+# Список ВМ в каталоге
+yc compute instance list --folder-id b1g4blc2guo29mqbh6bp
+
+# Список публичных IP-адресов
+yc vpc address list --folder-id b1g4blc2guo29mqbh6bp
+```
+
+### Docker (на ВМ)
+```bash
+# Просмотр всех запущенных контейнеров
+docker ps
+
+# Просмотр всех контейнеров (включая остановленные)
+docker ps -a
+
+# Логи контейнера (например, Kibana)
+docker logs kibana --tail 50
+
+# Перезапуск контейнера
+docker restart elasticsearch
+
+# Остановка и удаление контейнера
+docker stop kibana && docker rm kibana
+```
+
+### Проверка работоспособности
+```bash
+# Проверка сайта через Bastion
+curl -v http://<bastion_public_ip>:80
+
+# Проверка Grafana
+curl -v http://<bastion_public_ip>:3000
+
+# Проверка Kibana
+curl -v http://<bastion_public_ip>:5601
+
+# Проверка Elasticsearch (внутренний доступ)
+curl http://10.0.1.33:9200
+
+# Проверка метрик Nginx Log Exporter
+curl http://10.0.1.9:4040/metrics | grep nginx_http
+
+# Проверка индексов в Elasticsearch (логи)
+curl http://10.0.1.33:9200/_cat/indices
+```
+
+### Диагностика SSH-доступа через Bastion
+```bash
+# Подключение к Bastion
+ssh -i ~/.ssh/diplom ubuntu@<bastion_public_ip>
+
+# Проверка доступа к web1
+ssh -i ~/.ssh/diplom ubuntu@10.0.1.4 "hostname"
+
+# Копирование SSH-ключа на все ВМ
+ssh-copy-id -i ~/.ssh/diplom.pub ubuntu@10.0.1.4
+```
+
+### Резервное копирование (rsync)
+```bash
+# Ручной запуск бэкапа
+sudo /usr/local/bin/backup.sh
+
+# Просмотр созданных бэкапов
+ls -la /opt/backup/$(hostname)/
+
+# Просмотр логов бэкапа
+sudo tail -f /var/log/backup.log
+```
+
+### Git
+```bash
+# Клонирование репозитория
+git clone https://github.com/MindMaze74/diplom-project.git
+
+# Статус изменений
+git status
+
+# Добавление всех изменений
+git add .
+
+# Коммит с сообщением
+git commit -m "Описание изменений"
+
+# Отправка в удалённый репозиторий
+git push origin main
+```

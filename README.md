@@ -66,7 +66,7 @@
 ### Сеть
 
 - Развернут один VPC (`diplom-project-network`).
-- Сервера web, Prometheus, Elasticsearch помещены в приватные подсети.
+- Серверы web, Prometheus, Elasticsearch помещены в приватные подсети.
 - Bastion является единственной точкой входа из интернета, поэтому он размещён в публичной подсети, а Grafana и Kibana - в приватных.
 - Настроены Security Groups для соответствующих сервисов на входящий трафик только к нужным портам.
 - Настроена ВМ с публичным адресом (`bastion`), в которой открыт только один порт — 22 (SSH). Все Security Groups настроены на разрешение входящего SSH из этой security group. Реализована концепция bastion host.
@@ -151,7 +151,7 @@ Yandex предлагает готовые решения - Managed Databases, M
 
 Разумеется, у этого подхода есть обратная сторона: нет автоматического масштабирования, нет встроенного failover, и мы не гарантируем 99.9% доступности. Если нагрузка вырастет, придётся вручную увеличивать ресурсы ВМ. Если ВМ упадёт, сервис ляжет до ручного вмешательства (или до перезапуска Docker). Но для проектов, где важна демонстрация, а не промышленная надёжность, это оправданно.
 
-* Docker вместо нативной установки
+* Выбор Docker для согласованности окружений
 
 Можно было ставить Nginx, Prometheus и другие сервисы напрямую через apt или собирать из исходников. Но это означает кучу ручной работы, управление зависимостями, сложности с обновлениями и воспроизводимостью.
 
@@ -308,17 +308,15 @@ graph TD
 ### Предварительные требования
 Перед началом убедитесь, что у вас есть:
 
-Активный платёжный аккаунт в Yandex Cloud с достаточным балансом.
-
-Установленные инструменты:
-
-Terraform (>= 1.0) — [инструкция по установке](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
-Ansible (>= 2.9) — [инструкция по установке](https://docs.ansible.com/projects/ansible/latest/installation_guide/intro_installation.html)
-Yandex Cloud CLI — [инструкция по установке](https://yandex.cloud/ru/docs/cli/operations/install-cli?utm_referrer=about%3Ablank)
-Настроенный профиль Yandex Cloud CLI — выполните yc init и авторизуйтесь.
-Права доступа - ваш аккаунт должен иметь роль editor или выше в каталоге, где будут создаваться ресурсы.
-Сервисный аккаунт с авторизованным ключом (путь к ключу указывается в terraform.tfvars).
-SSH-ключи на локальной машине (~/.ssh/diplom и ~/.ssh/diplom.pub).
+* Активный платёжный аккаунт в Yandex Cloud с достаточным балансом.
+* Установленные инструменты:
+* Terraform (>= 1.0) — [инструкция по установке](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
+* Ansible (>= 2.9) — [инструкция по установке](https://docs.ansible.com/projects/ansible/latest/installation_guide/intro_installation.html)
+* Yandex Cloud CLI — [инструкция по установке](https://yandex.cloud/ru/docs/cli/operations/install-cli?utm_referrer=about%3Ablank)
+* Настроенный профиль Yandex Cloud CLI — выполните yc init и авторизуйтесь.
+* Права доступа - ваш аккаунт должен иметь роль editor или выше в каталоге, где будут создаваться ресурсы.
+* Сервисный аккаунт с авторизованным ключом (путь к ключу указывается в terraform.tfvars).
+* SSH-ключи на локальной машине (~/.ssh/diplom и ~/.ssh/diplom.pub).
 
 ### Шаги по развёртыванию
 

@@ -178,16 +178,23 @@
           GF_SECURITY_ADMIN_USER: "admin"
           GF_SECURITY_ADMIN_PASSWORD: "admin"
 
+# ============================================================
+# ИСПРАВЛЕНИЕ: Elasticsearch с Docker volume
+# ============================================================
 - name: Setup Elasticsearch
   hosts: elasticsearch
   become: yes
   tags: elasticsearch
   tasks:
-    - name: Create elasticsearch directory
-      file:
-        path: /opt/elasticsearch
-        state: directory
-        mode: '0755'
+    - name: Remove old elasticsearch container if exists
+      docker_container:
+        name: elasticsearch
+        state: absent
+
+    - name: Create Docker volume for Elasticsearch data
+      docker_volume:
+        name: elasticsearch-data
+        state: present
 
     - name: Increase vm.max_map_count
       sysctl:
@@ -196,7 +203,7 @@
         state: present
         reload: yes
 
-    - name: Run elasticsearch container
+    - name: Run elasticsearch container with volume
       docker_container:
         name: elasticsearch
         image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
@@ -204,25 +211,48 @@
         restart_policy: always
         ports:
           - "9200:9200"
+          - "9300:9300"
         env:
           discovery.type: "single-node"
           xpack.security.enabled: "false"
           ES_JAVA_OPTS: "-Xms512m -Xmx512m"
         volumes:
-          - /opt/elasticsearch:/usr/share/elasticsearch/data
+          - elasticsearch-data:/usr/share/elasticsearch/data
 
+    - name: Wait for Elasticsearch to be ready
+      uri:
+        url: "http://localhost:9200"
+        status_code: 200
+        timeout: 10
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 5
+      ignore_errors: yes
+
+    - name: Show Elasticsearch status
+      debug:
+        msg: "Elasticsearch on {{ inventory_hostname }} is {{ 'ready' if result.status == 200 else 'not ready' }}"
+
+# ============================================================
+# ИСПРАВЛЕНИЕ: Kibana с Docker volume
+# ============================================================
 - name: Setup Kibana
   hosts: kibana
   become: yes
   tags: kibana
   tasks:
-    - name: Create kibana directory
-      file:
-        path: /opt/kibana
-        state: directory
-        mode: '0755'
+    - name: Remove old kibana container if exists
+      docker_container:
+        name: kibana
+        state: absent
 
-    - name: Run kibana container
+    - name: Create Docker volume for Kibana data
+      docker_volume:
+        name: kibana-data
+        state: present
+
+    - name: Run kibana container with volume
       docker_container:
         name: kibana
         image: docker.elastic.co/kibana/kibana:8.17.0
@@ -231,9 +261,24 @@
         ports:
           - "5601:5601"
         volumes:
-          - /opt/kibana:/usr/share/kibana/data
+          - kibana-data:/usr/share/kibana/data
         env:
           ELASTICSEARCH_HOSTS: "http://{{ elasticsearch_private_ip }}:9200"
+
+    - name: Wait for Kibana to be ready
+      uri:
+        url: "http://localhost:5601"
+        status_code: 200
+        timeout: 10
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 10
+      ignore_errors: yes
+
+    - name: Show Kibana status
+      debug:
+        msg: "Kibana on {{ inventory_hostname }} is {{ 'ready' if result.status == 200 else 'not ready' }}"
 
 # Резервное копирование
 - import_playbook: backup.yml

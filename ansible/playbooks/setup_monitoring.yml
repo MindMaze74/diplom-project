@@ -1,0 +1,298 @@
+---
+- name: Setup monitoring and logging
+  hosts: web
+  become: yes
+  tags: monitoring
+  tasks:
+    # ----- Node Exporter -----
+    - name: Download Node Exporter
+      get_url:
+        url: https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz
+        dest: /tmp/node_exporter.tar.gz
+
+    - name: Extract Node Exporter
+      unarchive:
+        src: /tmp/node_exporter.tar.gz
+        dest: /tmp
+        remote_src: yes
+        creates: /tmp/node_exporter-1.8.2.linux-amd64/node_exporter
+
+    - name: Install Node Exporter binary
+      copy:
+        src: /tmp/node_exporter-1.8.2.linux-amd64/node_exporter
+        dest: /usr/local/bin/node_exporter
+        mode: 0755
+        remote_src: yes
+
+    - name: Create node_exporter user
+      user:
+        name: node_exporter
+        system: yes
+        shell: /bin/false
+        create_home: no
+
+    - name: Create Node Exporter systemd service
+      copy:
+        dest: /etc/systemd/system/node_exporter.service
+        content: |
+          [Unit]
+          Description=Prometheus Node Exporter
+          After=network.target
+
+          [Service]
+          User=node_exporter
+          Group=node_exporter
+          Type=simple
+          ExecStart=/usr/local/bin/node_exporter
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: restart node_exporter
+
+    - name: Start and enable Node Exporter
+      systemd:
+        name: node_exporter
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    # ----- Nginx Exporter -----
+    - name: Download Nginx Exporter
+      get_url:
+        url: https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v1.1.0/nginx-prometheus-exporter_1.1.0_linux_amd64.tar.gz
+        dest: /tmp/nginx_exporter.tar.gz
+
+    - name: Extract Nginx Exporter
+      unarchive:
+        src: /tmp/nginx_exporter.tar.gz
+        dest: /tmp
+        remote_src: yes
+        creates: /tmp/nginx-prometheus-exporter
+
+    - name: Install Nginx Exporter binary
+      copy:
+        src: /tmp/nginx-prometheus-exporter
+        dest: /usr/local/bin/nginx-prometheus-exporter
+        mode: 0755
+        remote_src: yes
+
+    - name: Create nginx_exporter user
+      user:
+        name: nginx_exporter
+        system: yes
+        shell: /bin/false
+
+    - name: Create Nginx Exporter systemd service
+      copy:
+        dest: /etc/systemd/system/nginx_exporter.service
+        content: |
+          [Unit]
+          Description=Nginx Prometheus Exporter
+          After=network.target
+
+          [Service]
+          User=nginx_exporter
+          Group=nginx_exporter
+          Type=simple
+          ExecStart=/usr/local/bin/nginx-prometheus-exporter -nginx.scrape-uri http://localhost/nginx_status
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: restart nginx_exporter
+
+    - name: Start and enable Nginx Exporter
+      systemd:
+        name: nginx_exporter
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    # ----- Filebeat (Docker) -----
+    - name: Create filebeat config directory
+      file:
+        path: /opt/filebeat
+        state: directory
+        mode: '0755'
+
+    - name: Deploy Filebeat configuration
+      copy:
+        dest: /opt/filebeat/filebeat.yml
+        content: |
+          filebeat.inputs:
+          - type: log
+            enabled: true
+            paths:
+              - /var/log/nginx/access.log
+            fields:
+              log_type: nginx_access
+            json.keys_under_root: true
+            json.overwrite_keys: true
+
+          - type: log
+            enabled: true
+            paths:
+              - /var/log/nginx/error.log
+            fields:
+              log_type: nginx_error
+
+          output.elasticsearch:
+            hosts: ["{{ elasticsearch_private_ip }}:9200"]
+            indices:
+              - index: "nginx-logs-%{+yyyy.MM.dd}"
+                when.contains:
+                  fields.log_type: "nginx_access"
+              - index: "nginx-error-logs-%{+yyyy.MM.dd}"
+                when.contains:
+                  fields.log_type: "nginx_error"
+
+          setup.template.name: "nginx-logs"
+          setup.template.pattern: "nginx-logs-*"
+
+    - name: Run filebeat container
+      docker_container:
+        name: filebeat
+        image: docker.elastic.co/beats/filebeat:7.17.25
+        state: started
+        restart_policy: always
+        volumes:
+          - /opt/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+          - /opt/nginx/logs:/var/log/nginx:ro
+        user: root
+
+    # ----- Включение stub_status внутри контейнера (без монтирования) -----
+    - name: Enable stub_status inside nginx container
+      shell: |
+        if docker exec nginx grep -q 'location /nginx_status' /etc/nginx/conf.d/default.conf; then
+          echo "stub_status already configured, skipping"
+        else
+          docker exec nginx sh -c "sed -i '/server {/a \ \ \ \ location /nginx_status { stub_status; allow 127.0.0.1; deny all; }' /etc/nginx/conf.d/default.conf"
+          docker exec nginx nginx -s reload
+        fi
+      args:
+        executable: /bin/bash
+      register: stub_status_result
+      changed_when: "'stub_status already configured' not in stub_status_result.stdout"
+      ignore_errors: yes   # Не останавливаем плейбук при ошибке
+
+    - name: Show stub_status result
+      debug:
+        msg: "Stub status enabled on {{ inventory_hostname }}"
+      when: stub_status_result.changed
+
+  handlers:
+    - name: restart node_exporter
+      systemd:
+        name: node_exporter
+        state: restarted
+        daemon_reload: yes
+
+    - name: restart nginx_exporter
+      systemd:
+        name: nginx_exporter
+        state: restarted
+        daemon_reload: yes
+
+
+- name: Update Prometheus config
+  hosts: prometheus
+  become: yes
+  tags: monitoring
+  tasks:
+    - name: Create prometheus config directory
+      file:
+        path: /opt/prometheus/config
+        state: directory
+        mode: '0755'
+
+    - name: Deploy prometheus.yml with exporters targets
+      copy:
+        dest: /opt/prometheus/config/prometheus.yml
+        content: |
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
+
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+
+            - job_name: 'node_exporter'
+              static_configs:
+                - targets:
+                    - '{{ hostvars["bastion"]["web1_private_ip"] }}:9100'
+                    - '{{ hostvars["bastion"]["web2_private_ip"] }}:9100'
+
+            - job_name: 'nginx_exporter'
+              static_configs:
+                - targets:
+                    - '{{ hostvars["bastion"]["web1_private_ip"] }}:9113'
+                    - '{{ hostvars["bastion"]["web2_private_ip"] }}:9113'
+
+    - name: Restart Prometheus with new config
+      docker_container:
+        name: prometheus
+        image: prom/prometheus:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "9090:9090"
+        volumes:
+          - /opt/prometheus/config:/etc/prometheus
+        recreate: yes
+
+
+- name: Import dashboards to Grafana
+  hosts: grafana
+  become: no
+  tags: monitoring
+  vars:
+    grafana_url: "http://localhost:3000"
+    grafana_user: "admin"
+    grafana_password: "admin"
+  tasks:
+    - name: Wait for Grafana to be ready
+      uri:
+        url: "{{ grafana_url }}/api/health"
+        method: GET
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 5
+      ignore_errors: yes
+
+    - name: Import Node Exporter dashboard
+      uri:
+        url: "{{ grafana_url }}/api/dashboards/db"
+        method: POST
+        user: "{{ grafana_user }}"
+        password: "{{ grafana_password }}"
+        force_basic_auth: yes
+        body_format: json
+        body:
+          dashboard: "{{ lookup('file', '../files/dashboards/node_exporter_full.json') | from_json }}"
+          overwrite: true
+        status_code: 200
+      register: import_node
+      until: import_node.status == 200
+      retries: 3
+      delay: 5
+
+    - name: Import Nginx dashboard
+      uri:
+        url: "{{ grafana_url }}/api/dashboards/db"
+        method: POST
+        user: "{{ grafana_user }}"
+        password: "{{ grafana_password }}"
+        force_basic_auth: yes
+        body_format: json
+        body:
+          dashboard: "{{ lookup('file', '../files/dashboards/nginx_dashboard.json') | from_json }}"
+          overwrite: true
+        status_code: 200
+      register: import_nginx
+      until: import_nginx.status == 200
+      retries: 3
+      delay: 5

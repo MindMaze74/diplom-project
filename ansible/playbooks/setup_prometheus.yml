@@ -2,27 +2,50 @@
 - name: Setup Prometheus
   hosts: prometheus
   become: yes
-  gather_facts: yes
-  
   tasks:
-    - name: Create prometheus directory
+  
+
+    # Добавляем обновление конфига
+    - name: Ensure prometheus config directory exists
       file:
-        path: /opt/prometheus
+        path: /etc/prometheus
         state: directory
-        mode: '0755'
+        mode: 0755
 
-    - name: Deploy prometheus config with extended targets
-      template:
-        src: ../templates/prometheus.yml.j2
-        dest: /opt/prometheus/prometheus.yml
+    - name: Deploy prometheus.yml with exporters targets
+      copy:
+        dest: /etc/prometheus/prometheus.yml
+        content: |
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
 
-    - name: Run prometheus container
-      docker_container:
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+
+            - job_name: 'node_exporter'
+              static_configs:
+                - targets:
+                    - '{{ hostvars["web1"]["ansible_default_ipv4"]["address"] }}:9100'
+                    - '{{ hostvars["web2"]["ansible_default_ipv4"]["address"] }}:9100'
+
+            - job_name: 'nginx_exporter'
+              static_configs:
+                - targets:
+                    - '{{ hostvars["web1"]["ansible_default_ipv4"]["address"] }}:9113'
+                    - '{{ hostvars["web2"]["ansible_default_ipv4"]["address"] }}:9113'
+      notify: reload prometheus
+
+    - name: Make sure Prometheus is running
+      systemd:
         name: prometheus
-        image: prom/prometheus:latest
         state: started
-        restart_policy: always
-        ports:
-          - "9090:9090"
-        volumes:
-          - /opt/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+        enabled: yes
+
+  handlers:
+    - name: reload prometheus
+      systemd:
+        name: prometheus
+        state: reloaded

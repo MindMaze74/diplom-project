@@ -1,0 +1,108 @@
+{
+  "title": "Nginx Monitoring",
+  "uid": "nginx_dashboard",
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP Requests per Second",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(nginx_http_response_count_total[5m]))",
+          "legendFormat": "Total",
+          "refId": "A",
+          "datasource": "prometheus",
+          "interval": "15s"
+        },
+        {
+          "expr": "rate(nginx_http_response_count_total{status=~\"2.*\"}[5m])",
+          "legendFormat": "2xx",
+          "refId": "B",
+          "datasource": "prometheus",
+          "interval": "15s"
+        },
+        {
+          "expr": "rate(nginx_http_response_count_total{status=~\"4.*\"}[5m])",
+          "legendFormat": "4xx",
+          "refId": "C",
+          "datasource": "prometheus",
+          "interval": "15s"
+        },
+        {
+          "expr": "rate(nginx_http_response_count_total{status=~\"5.*\"}[5m])",
+          "legendFormat": "5xx",
+          "refId": "D",
+          "datasource": "prometheus",
+          "interval": "15s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "showThresholdMarkers": true,
+          "thresholdsStyle": {
+            "mode": "line"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 1000 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
+    },
+    {
+      "id": 2,
+      "title": "Response Size (bytes/sec)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(nginx_http_response_size_bytes_total[5m])",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "datasource": "prometheus",
+          "interval": "15s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "showThresholdMarkers": true,
+          "thresholdsStyle": {
+            "mode": "line"
+          }
+        }
+      },
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
+    },
+    {
+      "id": 3,
+      "title": "RPS by Instance",
+      "type": "table",
+      "targets": [
+        {
+          "expr": "sum by (instance) (rate(nginx_http_response_count_total[5m]))",
+          "format": "table",
+          "refId": "A",
+          "datasource": "prometheus",
+          "interval": "15s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "showThresholdMarkers": true,
+          "thresholdsStyle": {
+            "mode": "line"
+          }
+        }
+      },
+      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 8 }
+    }
+  ],
+  "schemaVersion": 36,
+  "version": 1
+}

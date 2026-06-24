@@ -1,0 +1,46 @@
+---
+- name: Import dashboards to Grafana
+  hosts: grafana
+  become: no
+  vars:
+    grafana_url: "http://localhost:3000"
+    grafana_user: "admin"
+    grafana_password: "admin"
+  tasks:
+    - name: Wait for Grafana to be ready
+      uri:
+        url: "{{ grafana_url }}/api/health"
+        method: GET
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 5
+
+    - name: Import Node Exporter dashboard
+      uri:
+        url: "{{ grafana_url }}/api/dashboards/db"
+        method: POST
+        user: "{{ grafana_user }}"
+        password: "{{ grafana_password }}"
+        force_basic_auth: yes
+        body_format: json
+        body:
+          dashboard: "{{ lookup('file', '../files/dashboards/node_exporter_full.json') | from_json }}"
+          overwrite: true
+        status_code: 200
+      delegate_to: localhost
+
+    - name: Import Nginx dashboard
+      uri:
+        url: "{{ grafana_url }}/api/dashboards/db"
+        method: POST
+        user: "{{ grafana_user }}"
+        password: "{{ grafana_password }}"
+        force_basic_auth: yes
+        body_format: json
+        body:
+          dashboard: "{{ lookup('file', '../files/dashboards/nginx_dashboard.json') | from_json }}"
+          overwrite: true
+        status_code: 200
+      delegate_to: localhost

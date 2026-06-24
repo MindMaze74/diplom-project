@@ -1,6 +1,5 @@
 # Группы безопасности
 
-
 # Bastion: доступ из интернета
 resource "yandex_vpc_security_group" "bastion" {
   depends_on  = [time_sleep.wait_for_security_groups]
@@ -39,7 +38,6 @@ resource "yandex_vpc_security_group" "bastion" {
   }
 }
 
-
 # Внутренняя группа: доступ от Bastion и между собой
 resource "yandex_vpc_security_group" "internal" {
   depends_on  = [time_sleep.wait_for_security_groups]
@@ -69,14 +67,15 @@ resource "yandex_vpc_security_group" "internal" {
     port           = 9200
     v4_cidr_blocks = ["10.0.0.0/8"] # Разрешаем всю внутреннюю сеть
   }
-# Добавляем правило для Prometheus
+
+  # Добавляем правило для Prometheus (порт 9090)
   ingress {
     description    = "Allow Prometheus from internal"
     protocol       = "TCP"
     port           = 9090
     v4_cidr_blocks = ["10.0.0.0/8"]   # разрешаем всей приватной сети
   }
-  #
+
   egress {
     description    = "Разрешаем весь исходящий трафик"
     protocol       = "ANY"
@@ -84,8 +83,7 @@ resource "yandex_vpc_security_group" "internal" {
   }
 }
 
-
-# Веб-серверы: доступ только от Bastion
+# Веб-серверы: доступ от Bastion и Prometheus
 resource "yandex_vpc_security_group" "web" {
   depends_on  = [time_sleep.wait_for_security_groups]
   name        = "${var.project_name}-web-sg"
@@ -104,6 +102,21 @@ resource "yandex_vpc_security_group" "web" {
     port              = 22
     security_group_id = yandex_vpc_security_group.bastion.id
   }
+
+  # ---------- ДОСТУП ДЛЯ PROMETHEUS К ЭКСПОРТЕРАМ ----------
+  ingress {
+    description    = "Node Exporter from Prometheus"
+    protocol       = "TCP"
+    port           = 9100
+    v4_cidr_blocks = ["10.0.1.0/24"]   # подсеть, где находится Prometheus
+  }
+  ingress {
+    description    = "Nginx Exporter from Prometheus"
+    protocol       = "TCP"
+    port           = 9113
+    v4_cidr_blocks = ["10.0.1.0/24"]   # подсеть, где находится Prometheus
+  }
+
   egress {
     description    = "Разрешаем весь исходящий трафик"
     protocol       = "ANY"

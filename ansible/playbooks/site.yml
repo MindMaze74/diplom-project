@@ -1,6 +1,17 @@
 ---
 # Основной плейбук Ansible
 
+- name: Wait for all VMs to be ready
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Wait for SSH to be available
+      wait_for:
+        port: 22
+        host: "{{ ansible_host }}"
+        timeout: 300
+        state: started
+
 - name: Setup SSH keys on Bastion
   import_playbook: setup_ssh_keys.yml
 

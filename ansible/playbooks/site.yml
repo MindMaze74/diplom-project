@@ -178,9 +178,7 @@
           GF_SECURITY_ADMIN_USER: "admin"
           GF_SECURITY_ADMIN_PASSWORD: "admin"
 
-# ============================================================
-# ИСПРАВЛЕНИЕ: Elasticsearch с Docker volume
-# ============================================================
+
 - name: Setup Elasticsearch
   hosts: elasticsearch
   become: yes
@@ -234,9 +232,7 @@
       debug:
         msg: "Elasticsearch on {{ inventory_hostname }} is {{ 'ready' if result.status == 200 else 'not ready' }}"
 
-# ============================================================
-# ИСПРАВЛЕНИЕ: Kibana с Docker volume
-# ============================================================
+
 - name: Setup Kibana
   hosts: kibana
   become: yes

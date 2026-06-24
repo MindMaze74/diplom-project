@@ -69,13 +69,21 @@ resource "yandex_vpc_security_group" "internal" {
     port           = 9200
     v4_cidr_blocks = ["10.0.0.0/8"] # Разрешаем всю внутреннюю сеть
   }
-
+# Добавляем правило для Prometheus
+  ingress {
+    description    = "Allow Prometheus from internal"
+    protocol       = "TCP"
+    port           = 9090
+    v4_cidr_blocks = ["10.0.0.0/8"]   # разрешаем всей приватной сети
+  }
+  #
   egress {
     description    = "Разрешаем весь исходящий трафик"
     protocol       = "ANY"
     v4_cidr_blocks = ["0.0.0.0/0"]
   }
 }
+
 
 # Веб-серверы: доступ только от Bastion
 resource "yandex_vpc_security_group" "web" {

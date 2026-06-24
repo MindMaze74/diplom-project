@@ -204,6 +204,7 @@ diplom-project
 ├── ansible
 │   ├── ansible.cfg
 │   ├── inventory
+│   │   └── inventory.ini
 │   ├── playbooks
 │   │   ├── backup.yml
 │   │   ├── setup_bastion.yml
@@ -237,6 +238,8 @@ diplom-project
     │   ├── bastion-cloud-init.yml.tpl
     │   ├── cloud-init.yml.tpl
     │   └── inventory.tpl
+    ├── terraform.tfstate
+    ├── terraform.tfstate.backup
     ├── terraform.tfvars
     ├── terraform.tfvars.example
     ├── timeouts.tf
@@ -373,9 +376,9 @@ graph TD
 
 | Сервис | URL | Логин/Пароль |
 |--------|-----|--------------|
-| **Сайт** | `http://<bastion_public_ip>/` | – |
-| **Grafana** | `http://<bastion_public_ip>:3000` | `admin` / `admin` |
-| **Kibana** | `http://<bastion_public_ip>:5601` | – (без аутентификации) |
+| **Сайт** | `http://93.77.186.51/` | – |
+| **Grafana** | `http://93.77.186.51:3000/login` | `admin` / `admin` |
+| **Kibana** | `http://93.77.186.51:5601` | – (без аутентификации) |
 >Важно:
 >Доступ осуществляется по протоколу HTTP (HTTPS не настроен).
 > Публичный IP Bastion можно получить командой:

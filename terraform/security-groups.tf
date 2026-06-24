@@ -3,7 +3,7 @@
 
 # Bastion: доступ из интернета
 resource "yandex_vpc_security_group" "bastion" {
-  depends_on = [time_sleep.wait_for_security_groups]
+  depends_on  = [time_sleep.wait_for_security_groups]
   name        = "${var.project_name}-bastion-sg"
   description = "Security group для bastion host"
   network_id  = yandex_vpc_network.main.id
@@ -42,7 +42,7 @@ resource "yandex_vpc_security_group" "bastion" {
 
 # Внутренняя группа: доступ от Bastion и между собой
 resource "yandex_vpc_security_group" "internal" {
-  depends_on = [time_sleep.wait_for_security_groups]
+  depends_on  = [time_sleep.wait_for_security_groups]
   name        = "${var.project_name}-internal-sg"
   description = "Internal security group for all VMs"
   network_id  = yandex_vpc_network.main.id
@@ -64,10 +64,10 @@ resource "yandex_vpc_security_group" "internal" {
 
   # Разрешаем Elasticsearch (порт 9200) от других ВМ в группе
   ingress {
-    description       = "Allow Elasticsearch from internal"
-    protocol          = "TCP"
-    port              = 9200
-    v4_cidr_blocks    = ["10.0.0.0/8"]   # Разрешаем всю внутреннюю сеть
+    description    = "Allow Elasticsearch from internal"
+    protocol       = "TCP"
+    port           = 9200
+    v4_cidr_blocks = ["10.0.0.0/8"] # Разрешаем всю внутреннюю сеть
   }
 
   egress {
@@ -79,7 +79,7 @@ resource "yandex_vpc_security_group" "internal" {
 
 # Веб-серверы: доступ только от Bastion
 resource "yandex_vpc_security_group" "web" {
-  depends_on = [time_sleep.wait_for_security_groups]
+  depends_on  = [time_sleep.wait_for_security_groups]
   name        = "${var.project_name}-web-sg"
   description = "Security group для веб-серверов"
   network_id  = yandex_vpc_network.main.id

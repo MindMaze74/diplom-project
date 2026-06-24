@@ -11,7 +11,7 @@ data "yandex_compute_image" "ubuntu" { family = "ubuntu-2204-lts" }
 
 provider "yandex" {
   service_account_key_file = var.service_account_key_file
-  cloud_id  = var.yc_cloud_id
-  folder_id = var.yc_folder_id
-  zone      = var.yc_zones[0]
+  cloud_id                 = var.yc_cloud_id
+  folder_id                = var.yc_folder_id
+  zone                     = var.yc_zones[0]
 }

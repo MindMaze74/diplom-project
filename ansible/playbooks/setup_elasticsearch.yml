@@ -5,18 +5,20 @@
   gather_facts: yes
 
   tasks:
-    - name: Create elasticsearch directory with correct permissions
-      file:
-        path: /opt/elasticsearch
-        state: directory
-        owner: "1000"
-        group: "1000"
-        mode: '0755'
-
     - name: Remove old elasticsearch container if exists
       docker_container:
         name: elasticsearch
         state: absent
+
+    - name: Remove old elasticsearch data directory if exists (optional, для чистоты)
+      file:
+        path: /opt/elasticsearch
+        state: absent
+
+    - name: Create Docker volume for Elasticsearch data
+      docker_volume:
+        name: elasticsearch-data
+        state: present
 
     - name: Increase vm.max_map_count
       sysctl:
@@ -25,7 +27,7 @@
         state: present
         reload: yes
 
-    - name: Run elasticsearch container
+    - name: Run elasticsearch container with volume
       docker_container:
         name: elasticsearch
         image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
@@ -39,8 +41,7 @@
           xpack.security.enabled: "false"
           ES_JAVA_OPTS: "-Xms512m -Xmx512m"
         volumes:
-          - /opt/elasticsearch:/usr/share/elasticsearch/data
-        user: "1000:1000"
+          - elasticsearch-data:/usr/share/elasticsearch/data
 
     - name: Wait for Elasticsearch to be ready
       uri:

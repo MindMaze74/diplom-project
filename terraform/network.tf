@@ -32,7 +32,7 @@ resource "yandex_vpc_gateway" "nat_gateway" {
   shared_egress_gateway {}
 }
 
-# Таблица маршрутизации с маршрутом по умолчанию через NAT
+# Таблица маршрутизации с маршрутом поумолчанию через NAT
 resource "yandex_vpc_route_table" "nat" {
   name       = "${var.project_name}-nat-route-table"
   network_id = yandex_vpc_network.main.id

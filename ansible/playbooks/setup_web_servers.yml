@@ -32,6 +32,11 @@
       get_url:
         url: https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz
         dest: /tmp/node_exporter.tar.gz
+        timeout: 30
+      register: download_node
+      until: download_node is success
+      retries: 3
+      delay: 10
 
     - name: Extract Node Exporter
       unarchive:
@@ -39,6 +44,7 @@
         dest: /tmp
         remote_src: yes
         creates: /tmp/node_exporter-1.8.2.linux-amd64/node_exporter
+      when: download_node is success
 
     - name: Install Node Exporter binary
       copy:
@@ -46,6 +52,7 @@
         dest: /usr/local/bin/node_exporter
         mode: 0755
         remote_src: yes
+      when: download_node is success
 
     - name: Create node_exporter user
       user:
@@ -79,15 +86,21 @@
         enabled: yes
         daemon_reload: yes
 
-    # ----- prometheus-nginxlog-exporter (метрики из логов Nginx) -----
+    # ----- prometheus-nginxlog-exporter -----
     - name: Download prometheus-nginxlog-exporter DEB package
       get_url:
         url: https://github.com/martin-helmich/prometheus-nginxlog-exporter/releases/download/v1.9.2/prometheus-nginxlog-exporter_1.9.2_linux_amd64.deb
         dest: /tmp/nginxlog-exporter.deb
+        timeout: 30
+      register: download_nginxlog
+      until: download_nginxlog is success
+      retries: 3
+      delay: 10
 
     - name: Install prometheus-nginxlog-exporter
       apt:
         deb: /tmp/nginxlog-exporter.deb
+      when: download_nginxlog is success
 
     - name: Create prometheus-nginxlog-exporter configuration
       copy:
@@ -111,51 +124,37 @@
         enabled: yes
         daemon_reload: yes
 
-    # ----- Filebeat (отправка логов в Elasticsearch) -----
-    - name: Add Elastic repository key
-      apt_key:
-        url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
-        state: present
-      ignore_errors: yes
-      register: elastic_key_result
-
-    - name: Add Elastic repository
-      apt_repository:
-        repo: "deb https://artifacts.elastic.co/packages/7.x/apt stable main"
-        state: present
-        update_cache: yes
-      when: elastic_key_result is success
-      ignore_errors: yes
-      register: elastic_repo_result
-
-    - name: Install Filebeat
-      apt:
-        name: filebeat
-        state: present
-        update_cache: yes
-      when: elastic_repo_result is success
-      ignore_errors: yes
+    # ----- Filebeat (Docker-контейнер) -----
+    - name: Create filebeat config directory
+      file:
+        path: /opt/filebeat
+        state: directory
+        mode: '0755'
 
     - name: Deploy Filebeat configuration
       copy:
-        dest: /etc/filebeat/filebeat.yml
+        dest: /opt/filebeat/filebeat.yml
         content: |
           filebeat.inputs:
           - type: log
             enabled: true
             paths:
-              - /opt/nginx/logs/access.log
+              - /var/log/nginx/access.log
             fields:
               log_type: nginx_access
-            json.keys_under_root: true
-            json.overwrite_keys: true
 
           - type: log
             enabled: true
             paths:
-              - /opt/nginx/logs/error.log
+              - /var/log/nginx/error.log
             fields:
               log_type: nginx_error
+
+          processors:
+            - add_fields:
+                target: host
+                fields:
+                  name: "{{ ansible_hostname }}"
 
           output.elasticsearch:
             hosts: ["{{ elasticsearch_private_ip }}:9200"]
@@ -169,22 +168,58 @@
 
           setup.template.name: "nginx-logs"
           setup.template.pattern: "nginx-logs-*"
-      when: elastic_repo_result is success and elastic_key_result is success
-      notify: restart filebeat
+          setup.template.overwrite: true
+          setup.ilm.enabled: false
+      notify: restart filebeat_container
 
-    - name: Start and enable Filebeat
-      systemd:
-        name: filebeat
-        state: started
-        enabled: yes
-      when: elastic_repo_result is success and elastic_key_result is success
+    # ----- Очистка старых индексов и шаблона Elasticsearch -----
+    - name: Delete nginx index template
+      uri:
+        url: "http://{{ elasticsearch_private_ip }}:9200/_index_template/nginx-logs"
+        method: DELETE
+        status_code: 200,404
       ignore_errors: yes
+      run_once: yes
+      delegate_to: localhost
+
+    - name: Get list of nginx indices
+      uri:
+        url: "http://{{ elasticsearch_private_ip }}:9200/_cat/indices/nginx-*?h=index"
+        return_content: yes
+      register: indices_list
+      ignore_errors: yes
+      run_once: yes
+      delegate_to: localhost
+
+    - name: Delete each nginx index
+      uri:
+        url: "http://{{ elasticsearch_private_ip }}:9200/{{ item }}"
+        method: DELETE
+        status_code: 200,404
+      loop: "{{ indices_list.content.split('\n') }}"
+      when: indices_list.content | length > 0
+      ignore_errors: yes
+      run_once: yes
+      delegate_to: localhost
+
+    - name: Run filebeat container
+      docker_container:
+        name: filebeat
+        image: docker.elastic.co/beats/filebeat:7.17.25
+        state: started
+        restart_policy: always
+        recreate: yes
+        volumes:
+          - /opt/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+          - /opt/nginx/logs:/var/log/nginx:ro
+        user: root
 
   handlers:
     - name: restart nginx_container
       docker_container:
         name: nginx
-        state: restarted
+        state: started
+        restart: yes
       ignore_errors: yes
 
     - name: restart node_exporter
@@ -199,8 +234,8 @@
         state: restarted
         daemon_reload: yes
 
-    - name: restart filebeat
-      systemd:
+    - name: restart filebeat_container
+      docker_container:
         name: filebeat
-        state: restarted
-        daemon_reload: yes
+        state: started
+        restart: yes

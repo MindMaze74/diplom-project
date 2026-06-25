@@ -205,20 +205,29 @@ Yandex предлагает готовые решения - Managed Databases, M
 diplom-project
 ├── ansible
 │   ├── ansible.cfg
+│   ├── files
+│   │   └── dashboards
+│   │       ├── nginx_dashboard.json
+│   │       └── node_exporter_full.json
 │   ├── inventory
 │   │   └── inventory.ini
-│   ├── playbooks
-│   │   ├── backup.yml
-│   │   ├── setup_bastion.yml
-│   │   ├── setup_elasticsearch.yml
-│   │   ├── setup_grafana.yml
-│   │   ├── setup_kibana.yml
-│   │   ├── setup_prometheus.yml
-│   │   ├── setup_ssh_keys.yml
-│   │   ├── setup_web_servers.yml
-│   │   └── site.yml
-│   └── templates
+│   └── playbooks
+│       ├── backup.yml
+│       ├── import_dashboards.yml
+│       ├── setup_bastion.yml
+│       ├── setup_elasticsearch.yml
+│       ├── setup_grafana.yml
+│       ├── setup_kibana.yml
+│       ├── setup_monitoring.yml
+│       ├── setup_prometheus.yml
+│       ├── setup_ssh_keys.yml
+│       ├── setup_web_servers.yml
+│       └── site.yml
 ├── img
+│   ├── 1.png
+│   ├── 2.png
+│   ├── 3.png
+│   ├── 4.png
 │   ├── img15.png
 │   ├── img16.png
 │   ├── img17.png

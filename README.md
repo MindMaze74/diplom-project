@@ -77,6 +77,12 @@
 - Вместо платных снапшотов Yandex Cloud реализован бесплатный бэкап через **rsync** на Bastion.
 - Настроена ежедневная задача (cron) для копирования важных файлов (`/etc`, `/var/log`, `/opt`, `/home/ubuntu`) в каталог `/opt/backup`.
 - Ограничено время жизни бэкапов до 7 дней (автоматическая очистка старых копий).
+- Путь хранения: бэкапы всех ВМ сохраняются на Bastion-хосте в каталоге `/opt/backup/<имя_хоста>/<дата>/`. Символическая ссылка `latest` всегда указывает на последний успешный бэкап.
+- Восстановление: для восстановления данных скопируйте нужные файлы из каталога бэкапа обратно на целевую ВМ, например:
+  ```bash
+  rsync -av /opt/backup/web1/latest/opt/nginx/ /opt/nginx/
+  ```
+
 > **Скриншот Резервного копирования:**  
 > ![Резервное копирование](https://github.com/MindMaze74/diplom-project/blob/main/img/4.png)
 ---
@@ -174,6 +180,20 @@ Yandex предлагает готовые решения - Managed Databases, M
 | **Docker** | Контейнеризация всех сервисов. | Изолирует и упрощает развёртывание приложений. |
 | **Yandex Cloud CLI** | Создание сервисного аккаунта и авторизованного ключа, диагностика ресурсов. | Используется для ручных проверок и создания ключей. |
 | **Git** | Управление версиями кода. | Репозиторий на GitHub: [MindMaze74/diplom-project](https://github.com/MindMaze74/diplom-project). |
+
+| Технология | Версия / Комментарий |
+|------------|----------------------|
+| Terraform | >= 1.0 |
+| Ansible | >= 2.9 |
+| Docker | 29.6.0 |
+| Nginx | 1.31 (в официальном образе) |
+| Prometheus | 3.5.4 |
+| Grafana | 10.x |
+| Elasticsearch | 8.17.0 |
+| Kibana | 8.17.0 |
+| Filebeat | 7.17.25 |
+| Node Exporter | 1.8.2 |
+| prometheus-nginxlog-exporter | 1.9.2 |
 
 ### Стек сервисов (запущены в Docker)
 
@@ -335,6 +355,7 @@ graph TD
 - **Права доступа** — ваш аккаунт должен иметь роль `editor` или выше в каталоге.
 - **Сервисный аккаунт** с авторизованным ключом (путь указывается в `terraform.tfvars`).
 - **SSH-ключи** на локальной машине (`~/.ssh/diplom` и `~/.ssh/diplom.pub`).
+
 ### Шаги по развёртыванию
 
 1.  **Клонировать репозиторий**:
@@ -382,6 +403,28 @@ graph TD
     ```
 8.  **Проверить доступность сервисов (см. раздел Доступ к сервисам).**
 
+9.  **Проверка Elasticsearch**
+    ```bash
+    curl -s http://10.0.1.3:9200/_cluster/health | jq .
+    ```
+10. **Проверка Kibana**
+    ```bash
+    curl -s http://10.0.1.16:5601/api/status | jq .
+    ```
+### Health Checks
+
+Для быстрой проверки состояния всех сервисов выполните на соответствующих ВМ:
+
+| Сервис | Команда проверки |
+|--------|-------------------|
+| Nginx | `curl -s http://localhost/ \| head -5` |
+| Node Exporter | `curl -s http://localhost:9100/metrics \| head -5` |
+| Nginx Log Exporter | `curl -s http://localhost:4040/metrics \| grep nginx_http` |
+| Prometheus | `curl -s http://localhost:9090/api/v1/query?query=up` |
+| Grafana | `curl -s http://localhost:3000/api/health` |
+| Elasticsearch | `curl -s http://localhost:9200/_cluster/health` |
+| Kibana | `curl -s http://localhost:5601/api/status` |
+| Filebeat | `docker logs filebeat --tail 10` (на каждом веб-сервере) |
 
 #### Доступ к сервисам
 

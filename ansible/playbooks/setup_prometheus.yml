@@ -3,9 +3,6 @@
   hosts: prometheus
   become: yes
   tasks:
-  
-
-    # Добавляем обновление конфига
     - name: Ensure prometheus config directory exists
       file:
         path: /etc/prometheus
@@ -36,6 +33,12 @@
                 - targets:
                     - '{{ hostvars["web1"]["ansible_default_ipv4"]["address"] }}:9113'
                     - '{{ hostvars["web2"]["ansible_default_ipv4"]["address"] }}:9113'
+
+            - job_name: 'nginxlog'
+              static_configs:
+                - targets:
+                    - '{{ hostvars["web1"]["ansible_default_ipv4"]["address"] }}:4040'
+                    - '{{ hostvars["web2"]["ansible_default_ipv4"]["address"] }}:4040'
       notify: reload prometheus
 
     - name: Make sure Prometheus is running

@@ -103,18 +103,24 @@ resource "yandex_vpc_security_group" "web" {
     security_group_id = yandex_vpc_security_group.bastion.id
   }
 
-  # ---------- ДОСТУП ДЛЯ PROMETHEUS К ЭКСПОРТЕРАМ ----------
   ingress {
     description    = "Node Exporter from Prometheus"
     protocol       = "TCP"
     port           = 9100
-    v4_cidr_blocks = ["10.0.1.0/24"]   # подсеть, где находится Prometheus
+    v4_cidr_blocks = ["10.0.1.0/24"]
   }
   ingress {
     description    = "Nginx Exporter from Prometheus"
     protocol       = "TCP"
     port           = 9113
-    v4_cidr_blocks = ["10.0.1.0/24"]   # подсеть, где находится Prometheus
+    v4_cidr_blocks = ["10.0.1.0/24"]
+  }
+  # НОВОЕ ПРАВИЛО для порта 4040
+  ingress {
+    description    = "Nginx Log Exporter from Prometheus"
+    protocol       = "TCP"
+    port           = 4040
+    v4_cidr_blocks = ["10.0.1.0/24"]
   }
 
   egress {

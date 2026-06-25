@@ -2,6 +2,7 @@
 - name: Import dashboards to Grafana
   hosts: grafana
   become: no
+  tags: monitoring
   vars:
     grafana_url: "http://localhost:3000"
     grafana_user: "admin"
@@ -16,6 +17,7 @@
       until: result.status == 200
       retries: 30
       delay: 5
+      ignore_errors: yes
 
     - name: Import Node Exporter dashboard
       uri:
@@ -29,7 +31,10 @@
           dashboard: "{{ lookup('file', '../files/dashboards/node_exporter_full.json') | from_json }}"
           overwrite: true
         status_code: 200
-      delegate_to: localhost
+      register: import_node
+      until: import_node.status == 200
+      retries: 3
+      delay: 5
 
     - name: Import Nginx dashboard
       uri:
@@ -43,4 +48,7 @@
           dashboard: "{{ lookup('file', '../files/dashboards/nginx_dashboard.json') | from_json }}"
           overwrite: true
         status_code: 200
-      delegate_to: localhost
+      register: import_nginx
+      until: import_nginx.status == 200
+      retries: 3
+      delay: 5

@@ -5,12 +5,24 @@
   hosts: all
   gather_facts: no
   tasks:
+    - name: Initial delay
+      pause:
+        seconds: 30
+
     - name: Wait for SSH to be available
       wait_for:
         port: 22
         host: "{{ ansible_host }}"
         timeout: 300
         state: started
+
+- name: Verify all hosts are reachable
+  hosts: all
+  gather_facts: yes
+  tasks:
+    - name: Ping
+      ping:
+      ignore_unreachable: yes
 
 - name: Setup SSH keys on Bastion
   import_playbook: setup_ssh_keys.yml
@@ -86,7 +98,7 @@
       debug:
         msg: "Docker installed on {{ inventory_hostname }}: {{ docker_version.stdout }}"
 
-- name: Setup web servers
+- name: Setup web servers (Nginx container + site)
   hosts: web
   become: yes
   tags: web
@@ -135,6 +147,9 @@
           - /opt/nginx/html:/usr/share/nginx/html:ro
           - /opt/nginx/logs:/var/log/nginx
 
+# Установка экспортёров (Node Exporter + prometheus-nginxlog-exporter) на веб-серверах
+- import_playbook: setup_web_servers.yml
+
 - name: Setup Prometheus
   hosts: prometheus
   become: yes
@@ -146,7 +161,28 @@
         state: directory
         mode: '0755'
 
-    - name: Run prometheus container
+    - name: Deploy prometheus.yml
+      copy:
+        dest: /opt/prometheus/prometheus.yml
+        content: |
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
+
+          scrape_configs:
+            - job_name: 'node'
+              static_configs:
+                - targets:
+                    - '{{ hostvars["web1"]["ansible_default_ipv4"]["address"] }}:9100'
+                    - '{{ hostvars["web2"]["ansible_default_ipv4"]["address"] }}:9100'
+
+            - job_name: 'nginxlog'
+              static_configs:
+                - targets:
+                    - '{{ hostvars["web1"]["ansible_default_ipv4"]["address"] }}:4040'
+                    - '{{ hostvars["web2"]["ansible_default_ipv4"]["address"] }}:4040'
+
+    - name: Run prometheus container with config
       docker_container:
         name: prometheus
         image: prom/prometheus:latest
@@ -154,6 +190,8 @@
         restart_policy: always
         ports:
           - "9090:9090"
+        volumes:
+          - /opt/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
 
 - name: Setup Grafana
   hosts: grafana
@@ -178,6 +216,9 @@
           GF_SECURITY_ADMIN_USER: "admin"
           GF_SECURITY_ADMIN_PASSWORD: "admin"
 
+# Импорт дашбордов в Grafana (отдельный play)
+- name: Import dashboards to Grafana
+  import_playbook: import_dashboards.yml
 
 - name: Setup Elasticsearch
   hosts: elasticsearch
@@ -231,7 +272,6 @@
     - name: Show Elasticsearch status
       debug:
         msg: "Elasticsearch on {{ inventory_hostname }} is {{ 'ready' if result.status == 200 else 'not ready' }}"
-
 
 - name: Setup Kibana
   hosts: kibana

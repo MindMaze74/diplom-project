@@ -3,18 +3,29 @@
   hosts: web
   become: yes
   tasks:
-    # ----- установка nginx и сайта
-    # Например:
-    - name: Install nginx
-      apt:
-        name: nginx
-        state: present
+    # ----- Подготовка каталогов для Nginx (Docker) -----
+    - name: Ensure nginx directories exist
+      file:
+        path: "/opt/nginx/{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - html
+        - logs
+        - conf.d
 
-    - name: Ensure nginx is running
-      systemd:
-        name: nginx
-        state: started
-        enabled: yes
+    # ----- Настройка страницы статуса Nginx (/nginx_status) -----
+    - name: Deploy nginx status configuration
+      copy:
+        dest: /opt/nginx/conf.d/status.conf
+        content: |
+          location /nginx_status {
+              stub_status on;
+              allow 127.0.0.1;
+              allow ::1;
+              deny all;
+          }
+      notify: restart nginx_container
 
     # ----- Node Exporter -----
     - name: Download Node Exporter
@@ -68,75 +79,62 @@
         enabled: yes
         daemon_reload: yes
 
-    # ----- Nginx Exporter -----
-    - name: Download Nginx Exporter
+    # ----- prometheus-nginxlog-exporter (метрики из логов Nginx) -----
+    - name: Download prometheus-nginxlog-exporter DEB package
       get_url:
-        url: https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v1.0.0/nginx-prometheus-exporter-1.0.0-linux-amd64.tar.gz
-        dest: /tmp/nginx_exporter.tar.gz
+        url: https://github.com/martin-helmich/prometheus-nginxlog-exporter/releases/download/v1.9.2/prometheus-nginxlog-exporter_1.9.2_linux_amd64.deb
+        dest: /tmp/nginxlog-exporter.deb
 
-    - name: Extract Nginx Exporter
-      unarchive:
-        src: /tmp/nginx_exporter.tar.gz
-        dest: /tmp
-        remote_src: yes
-        creates: /tmp/nginx-prometheus-exporter
+    - name: Install prometheus-nginxlog-exporter
+      apt:
+        deb: /tmp/nginxlog-exporter.deb
 
-    - name: Install Nginx Exporter binary
+    - name: Create prometheus-nginxlog-exporter configuration
       copy:
-        src: /tmp/nginx-prometheus-exporter
-        dest: /usr/local/bin/nginx-prometheus-exporter
-        mode: 0755
-        remote_src: yes
-
-    - name: Create nginx_exporter user
-      user:
-        name: nginx_exporter
-        system: yes
-        shell: /bin/false
-
-    - name: Create Nginx Exporter systemd service
-      copy:
-        dest: /etc/systemd/system/nginx_exporter.service
+        dest: /etc/prometheus-nginxlog-exporter.hcl
         content: |
-          [Unit]
-          Description=Nginx Prometheus Exporter
-          After=network.target
+          listen {
+              port = 4040
+              address = "0.0.0.0"
+          }
 
-          [Service]
-          User=nginx_exporter
-          Group=nginx_exporter
-          Type=simple
-          ExecStart=/usr/local/bin/nginx-prometheus-exporter -nginx.scrape-uri http://localhost/nginx_status
-          Restart=always
+          namespace "nginx" {
+              format = "$remote_addr - $remote_user [$time_local] \"$request\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\""
+              source_files = ["/opt/nginx/logs/access.log"]
+          }
+      notify: restart nginxlog_exporter
 
-          [Install]
-          WantedBy=multi-user.target
-      notify: restart nginx_exporter
-
-    - name: Start and enable Nginx Exporter
+    - name: Start and enable prometheus-nginxlog-exporter
       systemd:
-        name: nginx_exporter
+        name: prometheus-nginxlog-exporter
         state: started
         enabled: yes
         daemon_reload: yes
 
-    # ----- Filebeat -----
+    # ----- Filebeat (отправка логов в Elasticsearch) -----
     - name: Add Elastic repository key
       apt_key:
         url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
         state: present
+      ignore_errors: yes
+      register: elastic_key_result
 
     - name: Add Elastic repository
       apt_repository:
         repo: "deb https://artifacts.elastic.co/packages/7.x/apt stable main"
         state: present
         update_cache: yes
+      when: elastic_key_result is success
+      ignore_errors: yes
+      register: elastic_repo_result
 
     - name: Install Filebeat
       apt:
         name: filebeat
         state: present
         update_cache: yes
+      when: elastic_repo_result is success
+      ignore_errors: yes
 
     - name: Deploy Filebeat configuration
       copy:
@@ -146,7 +144,7 @@
           - type: log
             enabled: true
             paths:
-              - /var/log/nginx/access.log
+              - /opt/nginx/logs/access.log
             fields:
               log_type: nginx_access
             json.keys_under_root: true
@@ -155,7 +153,7 @@
           - type: log
             enabled: true
             paths:
-              - /var/log/nginx/error.log
+              - /opt/nginx/logs/error.log
             fields:
               log_type: nginx_error
 
@@ -171,6 +169,7 @@
 
           setup.template.name: "nginx-logs"
           setup.template.pattern: "nginx-logs-*"
+      when: elastic_repo_result is success and elastic_key_result is success
       notify: restart filebeat
 
     - name: Start and enable Filebeat
@@ -178,17 +177,25 @@
         name: filebeat
         state: started
         enabled: yes
+      when: elastic_repo_result is success and elastic_key_result is success
+      ignore_errors: yes
 
   handlers:
+    - name: restart nginx_container
+      docker_container:
+        name: nginx
+        state: restarted
+      ignore_errors: yes
+
     - name: restart node_exporter
       systemd:
         name: node_exporter
         state: restarted
         daemon_reload: yes
 
-    - name: restart nginx_exporter
+    - name: restart nginxlog_exporter
       systemd:
-        name: nginx_exporter
+        name: prometheus-nginxlog-exporter
         state: restarted
         daemon_reload: yes
 

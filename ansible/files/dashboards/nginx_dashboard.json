@@ -61,7 +61,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "rate(nginx_http_response_size_bytes_total[5m])",
+          "expr": "rate(nginx_http_response_size_bytes[5m])",
           "legendFormat": "{{instance}}",
           "refId": "A",
           "datasource": "prometheus",

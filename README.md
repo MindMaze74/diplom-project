@@ -412,6 +412,7 @@ graph TD
 
     > **Скриншот terraform output:**  
     >![terraform output](https://github.com/MindMaze74/diplom-project/blob/main/img/7.png)
+    
     > **Скриншот yandex cloud:**  
     >![yandex cloud](https://github.com/MindMaze74/diplom-project/blob/main/img/8.png)
 

@@ -449,9 +449,9 @@ ssh -i ~/.ssh/diplom ubuntu@<публичный IP Bastion>
 
 | Сервис | URL | Логин/Пароль |
 |--------|-----|--------------|
-| **Сайт** | `http://<alb_external_ip>/` | – |
-| **Grafana** | `http://<bastion_public_ip>:3000/login` | `admin` / `admin` |
-| **Kibana** | `http://<bastion_public_ip>:5601` | – (без аутентификации) |
+| **Сайт** | `http://<публичный IP ALB>/` | – |
+| **Grafana** | `http://<публичный IP Bastion>:3000/login` | `admin` / `admin` |
+| **Kibana** | `http://<публичный IP Bastion>:5601` | – (без аутентификации) |
 >Важно:
 >Доступ осуществляется по протоколу HTTP (HTTPS не настроен).
 >Kibana может быть недоступна в течение первых 2–3 минут после запуска, так как ей требуется время для инициализации.
@@ -545,7 +545,7 @@ yc compute disk list --folder-id <ваш_folder_id>
 yc vpc address list --folder-id <ваш_folder_id>
 
 # Проверка бэкапов в бакете
-aws s3 ls s3://diplom-project-backup-<folder_id>/ --endpoint-url=https://storage.yandexcloud.net
+aws s3 ls s3://diplom-project-backup-<ваш_folder_id>/ --endpoint-url=https://storage.yandexcloud.net
 ```
 ### Docker (на ВМ)
 ```bash

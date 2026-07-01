@@ -221,7 +221,7 @@ aws s3 ls s3://diplom-project-backup-<folder_id>/ --endpoint-url=https://storage
 | **Node Exporter** | Сбор системных метрик с веб-серверов для Prometheus. |
 | **Nginx Log Exporter** | Сбор метрик доступа Nginx для Prometheus. |
 | **Prometheus** | Сбор и хранение метрик мониторинга. |
-| **Grafana** | Визуализация метрик (дашборды). |
+| **Grafana** | Визуализация метрик из Prometheus. Доступ через прокси на Bastion (порт 3000). |
 | **Elasticsearch** | Хранилище логов от Filebeat. |
 | **Kibana** | Просмотр и анализ логов. |
 | **Filebeat** | Сбор и отправка логов Nginx в Elasticsearch (запущен в Docker-контейнере). |
@@ -314,7 +314,7 @@ graph TD
     subgraph "Yandex Cloud"
         subgraph "Публичная подсеть (10.0.10.0/24)"
             Bastion[("Bastion
-(SSH-шлюз + Nginx-прокси для Grafana/Kibana)")]
+(SSH-шлюз + прокси Grafana/Kibana)")]
             ALB[("Yandex ALB
 (балансировка веб-трафика)")]
         end
@@ -331,8 +331,9 @@ graph TD
             Web2[("Web2 (Nginx)")]
         end
 
-        subgraph "Маршрутизация"
+        subgraph "Маршрутизация и хранилище"
             NAT[("NAT-шлюз")]
+            S3[("Yandex Object Storage")]
         end
     end
 
@@ -360,6 +361,8 @@ graph TD
     Elasticsearch -.->|"Доступ в интернет"| NAT
     Kibana -.->|"Доступ в интернет"| NAT
     Bastion -.->|"Доступ в интернет"| NAT
+
+    Bastion -->|"Загрузка бэкапов"| S3
 ```
 
 
@@ -381,7 +384,7 @@ graph TD
 ### Шаги по развёртыванию
 
 1.  **Подготовка переменных.**
-    В папке terraform/ отредактируйте terraform.tfvars.example в terraform.tfvars.tf : укажите folder_id, service_account_key_file (путь к JSON‑ключу), public_key (содержимое ~/.ssh/diplom.pub) и другие параметры.
+    В папке terraform/скопируйте terraform.tfvars.example в terraform.tfvars и отредактируйте его, указав свои параметры: укажите folder_id, service_account_key_file (путь к JSON‑ключу), public_key (содержимое ~/.ssh/diplom.pub) и другие параметры.
 2.  **Клонировать репозиторий**:
     ```bash
     git clone https://github.com/MindMaze74/diplom-project.git
@@ -447,8 +450,8 @@ ssh -i ~/.ssh/diplom ubuntu@<публичный IP Bastion>
 | Сервис | URL | Логин/Пароль |
 |--------|-----|--------------|
 | **Сайт** | `http://<alb_external_ip>/` | – |
-| **Grafana** | `http://93.77.177.69:3000/login` | `admin` / `admin` |
-| **Kibana** | `http://93.77.177.69:5601` | – (без аутентификации) |
+| **Grafana** | `http://<bastion_public_ip>:3000/login` | `admin` / `admin` |
+| **Kibana** | `http://<bastion_public_ip>:5601` | – (без аутентификации) |
 >Важно:
 >Доступ осуществляется по протоколу HTTP (HTTPS не настроен).
 >Kibana может быть недоступна в течение первых 2–3 минут после запуска, так как ей требуется время для инициализации.
@@ -599,7 +602,7 @@ ssh -i ~/.ssh/diplom ubuntu@<bastion_public_ip>
 # Проверка доступа к web1
 ssh -i ~/.ssh/diplom ubuntu@<web1_private_ip> "hostname"
 
-# Копирование SSH-ключа на все ВМ
+# Копирование SSH-ключа на все
 ssh-copy-id -i ~/.ssh/diplom.pub ubuntu@<web1_private_ip>
 ```
 

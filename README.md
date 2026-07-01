@@ -126,7 +126,8 @@ sudo /usr/local/bin/s3_backup.sh
 ```bash
 aws s3 ls s3://diplom-project-backup-<folder_id>/ --endpoint-url=https://storage.yandexcloud.net
 ```
-
+> **Скриншот бэкапов в бакете:**  
+>![yandex cloud](https://github.com/MindMaze74/diplom-project/blob/main/img/9.png)
 ---
 
 **Теперь рассмотрим архитектурные решения, которые легли в основу проекта**
@@ -409,6 +410,10 @@ graph TD
 
     > Примечание: Параметр -parallelism=1 ограничивает параллельность для обхода квоты на создание публичных IP-адресов.
 
+    > **Скриншот terraform output:**  
+    >![terraform output](https://github.com/MindMaze74/diplom-project/blob/main/img/7.png)
+    > **Скриншот yandex cloud:**  
+    >![yandex cloud](https://github.com/MindMaze74/diplom-project/blob/main/img/8.png)
 
 5. **Генерация динамического инвентаря.**  
     Terraform формирует файл инвентаря для Ansible (обычно в ansible/inventory/inventory.ini). Убедитесь, что в нём корректно указаны хосты и группы (web, monitoring, logging, bastion).

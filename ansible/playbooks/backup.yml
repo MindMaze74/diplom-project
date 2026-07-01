@@ -23,7 +23,38 @@
         state: directory
         mode: '0755'
 
-    - name: Create backup script on each non-bastion host (with excludes)
+    # Подготавливаем SSH-ключ для root на Bastion
+    - name: Ensure .ssh directory for root on Bastion
+      file:
+        path: /root/.ssh
+        state: directory
+        mode: '0700'
+      delegate_to: bastion
+      when: inventory_hostname == 'bastion'
+
+    - name: Copy private SSH key to root on Bastion (from ubuntu's id_rsa)
+      copy:
+        src: /home/ubuntu/.ssh/id_rsa
+        dest: /root/.ssh/id_rsa
+        remote_src: yes
+        owner: root
+        group: root
+        mode: '0600'
+      delegate_to: bastion
+      when: inventory_hostname == 'bastion'
+
+    - name: Copy public SSH key to root on Bastion
+      copy:
+        src: /home/ubuntu/.ssh/id_rsa.pub
+        dest: /root/.ssh/id_rsa.pub
+        remote_src: yes
+        owner: root
+        group: root
+        mode: '0644'
+      delegate_to: bastion
+      when: inventory_hostname == 'bastion'
+
+    - name: Create backup script on each non-bastion host (with correct excludes)
       copy:
         dest: /usr/local/bin/backup.sh
         mode: '0755'
@@ -34,17 +65,9 @@
           mkdir -p "$BACKUP_DIR"/{etc,var/log,opt,home/ubuntu}
           rsync -a --delete /etc/ "$BACKUP_DIR/etc/"
           rsync -a --delete /var/log/ "$BACKUP_DIR/var/log/"
-          # Копируем /opt, исключая тяжёлые и ненужные каталоги
-          rsync -a --delete /opt/ "$BACKUP_DIR/opt/" \
-            --exclude=/opt/backup \
-            --exclude=/opt/containerd \
-            --exclude=/opt/docker \
-            --exclude=/opt/prometheus \
-            --exclude=/opt/grafana \
-            --exclude=/opt/elasticsearch-data \
-            --exclude=/opt/kibana-data
+          # Копируем /opt, исключая папки backup, containerd, docker, prometheus, grafana (абсолютные и относительные)
+          rsync -a --delete --exclude=backup --exclude=containerd --exclude=docker --exclude=prometheus --exclude=grafana /opt/ "$BACKUP_DIR/opt/"
           rsync -a --delete /home/ubuntu/ "$BACKUP_DIR/home/"
-          # Удаляем старые локальные бэкапы (старше {{ retention_days }} дней)
           find {{ backup_local_dir }} -maxdepth 1 -type d -name "20*" -mtime +{{ retention_days }} -exec rm -rf {} \; 2>/dev/null
           echo "Local backup completed at $(date)"
       when: inventory_hostname != 'bastion'
@@ -84,7 +107,7 @@
       delegate_to: bastion
       when: inventory_hostname != 'bastion'
       register: sync_result
-      changed_when: "'synchronize' in sync_result.stdout"
+      changed_when: sync_result is changed
 
     - name: Run cleanup on Bastion
       shell: /usr/local/bin/backup_cleanup.sh
@@ -105,7 +128,7 @@
         name: "Pull backups to Bastion"
         minute: "0"
         hour: "3"
-        job: "ansible-playbook -i /home/ubuntu/diplom-test-alb/ansible/inventory/inventory.ini /home/ubuntu/diplom-test-alb/ansible/playbooks/backup.yml --tags pull"
+        job: "ansible-playbook -i /home/ubuntu/diplom-project/ansible/inventory/inventory.ini /home/ubuntu/diplom-project/ansible/playbooks/backup.yml --tags pull"
         state: present
       delegate_to: bastion
       when: inventory_hostname == 'bastion'

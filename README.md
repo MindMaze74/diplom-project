@@ -263,14 +263,22 @@ diplom-project
 │       ├── setup_kibana.yml
 │       ├── setup_monitoring.yml
 │       ├── setup_prometheus.yml
+│       ├── setup_s3_backup.yml
 │       ├── setup_ssh_keys.yml
 │       ├── setup_web_servers.yml
 │       └── site.yml
+├── deploy_s3_backup.sh
 ├── img
+│   ├── 10.png
+│   ├── 11.png
 │   ├── 1.png
 │   ├── 2.png
 │   ├── 3.png
-│   ├── 4.png
+│   ├── 5.png
+│   ├── 6.png
+│   ├── 7.png
+│   ├── 8.png
+│   ├── 9.png
 │   ├── img15.png
 │   ├── img16.png
 │   ├── img17.png
@@ -281,12 +289,14 @@ diplom-project
 ├── README.md
 ├── screen-instruction.md
 └── terraform
+    ├── alb.tf
     ├── bastion-cloud-init.yml
     ├── bastion.tf
     ├── instances.tf
     ├── network.tf
     ├── outputs.tf
     ├── provider.tf
+    ├── s3.tf
     ├── security-groups.tf
     ├── templates
     │   ├── bastion-cloud-init.yml.tpl

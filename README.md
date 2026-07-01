@@ -128,6 +128,9 @@ aws s3 ls s3://diplom-project-backup-<folder_id>/ --endpoint-url=https://storage
 ```
 > **Скриншот бэкапов в бакете:**  
 >![yandex cloud](https://github.com/MindMaze74/diplom-project/blob/main/img/9.png)
+
+> **Скриншот бэкапов на бастионе:**  
+>![бекап на бастионе](https://github.com/MindMaze74/diplom-project/blob/main/img/10.png)
 ---
 
 **Теперь рассмотрим архитектурные решения, которые легли в основу проекта**

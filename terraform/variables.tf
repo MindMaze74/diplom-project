@@ -20,7 +20,7 @@ variable "yc_zones" {
 variable "service_account_key_file" {
   description = "Путь к файлу ключа сервисного аккаунта"
   type        = string
-  default     = "~/diplom-sa-key.json"
+  default     = "/home/user/diplom-sa-key.json"
 }
 
 # Проект

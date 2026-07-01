@@ -1,20 +1,19 @@
 ---
 # Основной плейбук Ansible
 
-- name: Wait for all VMs to be ready
-  hosts: all
-  gather_facts: no
-  tasks:
-    - name: Initial delay
-      pause:
-        seconds: 30
-
-    - name: Wait for SSH to be available
-      wait_for:
-        port: 22
-        host: "{{ ansible_host }}"
-        timeout: 300
-        state: started
+# - name: Wait for all VMs to be ready
+#   hosts: all
+#   gather_facts: no
+#   tasks:
+#     - name: Initial delay
+#       pause:
+#         seconds: 30
+#     - name: Wait for SSH to be available
+#       wait_for:
+#         port: 22
+#         host: "{{ ansible_host }}"
+#         timeout: 300
+#         state: started
 
 - name: Verify all hosts are reachable
   hosts: all
@@ -37,7 +36,7 @@
         msg: "Host: {{ inventory_hostname }} - IP: {{ ansible_default_ipv4.address }}"
 
 - name: Install Docker on all servers
-  hosts: all
+  hosts: all:!bastion
   become: yes
   tags: docker
   tasks:

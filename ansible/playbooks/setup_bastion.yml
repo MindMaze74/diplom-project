@@ -1,67 +1,322 @@
 ---
-- name: Setup Bastion host
-  hosts: bastion
-  become: yes
-  gather_facts: yes
+# Основной плейбук Ansible
 
+# - name: Wait for all VMs to be ready
+#   hosts: all
+#   gather_facts: no
+#   tasks:
+#     - name: Initial delay
+#       pause:
+#         seconds: 30
+#     - name: Wait for SSH to be available
+#       wait_for:
+#         port: 22
+#         host: "{{ ansible_host }}"
+#         timeout: 300
+#         state: started
+
+- name: Verify all hosts are reachable
+  hosts: all
+  gather_facts: yes
   tasks:
-    - name: Install Nginx
+    - name: Ping
+      ping:
+      ignore_unreachable: yes
+
+- name: Setup SSH keys on Bastion
+  import_playbook: setup_ssh_keys.yml
+
+- name: Setup Bastion host (Nginx proxy for Grafana and Kibana)
+  import_playbook: setup_bastion.yml
+
+- name: Setup complete infrastructure
+  hosts: all
+  gather_facts: yes
+  tags: always
+  tasks:
+    - name: Show inventory
+      debug:
+        msg: "Host: {{ inventory_hostname }} - IP: {{ ansible_default_ipv4.address }}"
+
+- name: Install Docker on all servers (except Bastion)
+  hosts: all:!bastion
+  become: yes
+  tags: docker
+  tasks:
+    - name: Update apt cache
       apt:
-        name: nginx
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install prerequisites
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - gnupg
+          - lsb-release
+        state: present
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
         state: present
         update_cache: yes
 
-    - name: Create Nginx config for proxy
-      copy:
-        dest: /etc/nginx/sites-available/default
-        content: |
-          upstream web_backend {
-              server {{ web1_private_ip }}:80;
-              server {{ web2_private_ip }}:80;
-          }
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
 
-          server {
-              listen 80 default_server;
-              server_name _;
-              location / {
-                  proxy_pass http://web_backend;
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              }
-          }
-
-          server {
-              listen 3000;
-              server_name _;
-              location / {
-                  proxy_pass http://{{ grafana_private_ip }}:3000;
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              }
-          }
-
-          server {
-              listen 5601;
-              server_name _;
-              location / {
-                  proxy_pass http://{{ kibana_private_ip }}:5601;
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              }
-          }
-      notify: restart nginx
-
-    - name: Ensure Nginx is running
-      systemd:
-        name: nginx
+    - name: Start Docker service
+      service:
+        name: docker
         state: started
         enabled: yes
 
-  handlers:
-    - name: restart nginx
-      systemd:
+    - name: Add user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Verify Docker installation
+      command: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: Show Docker version
+      debug:
+        msg: "Docker installed on {{ inventory_hostname }}: {{ docker_version.stdout }}"
+
+- name: Setup web servers (Nginx container + site)
+  hosts: web
+  become: yes
+  tags: web
+  tasks:
+    - name: Create nginx directories
+      file:
+        path: "/opt/nginx/{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - html
+        - logs
+        - conf.d
+
+    - name: Deploy website
+      copy:
+        dest: /opt/nginx/html/index.html
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>Курсовая работа</title>
+            <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f0f0f0; }
+              h1 { color: #333; }
+              .server { color: #0066cc; font-weight: bold; }
+            </style>
+          </head>
+          <body>
+            <h1>Курсовая работа - Старцев Данила Антонович</h1>
+            <p>Сервер: <span class="server">{{ ansible_hostname }}</span></p>
+            <p>IP: <span class="server">{{ ansible_default_ipv4.address }}</span></p>
+          </body>
+          </html>
+
+    - name: Run nginx container
+      docker_container:
         name: nginx
-        state: restarted
+        image: nginx:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "80:80"
+        volumes:
+          - /opt/nginx/html:/usr/share/nginx/html:ro
+          - /opt/nginx/logs:/var/log/nginx
+
+# Установка экспортёров (Node Exporter + prometheus-nginxlog-exporter) на веб-серверах
+- import_playbook: setup_web_servers.yml
+
+- name: Setup Prometheus
+  hosts: prometheus
+  become: yes
+  tags: prometheus
+  tasks:
+    - name: Create prometheus directory
+      file:
+        path: /opt/prometheus
+        state: directory
+        mode: '0755'
+
+    - name: Deploy prometheus.yml
+      copy:
+        dest: /opt/prometheus/prometheus.yml
+        content: |
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
+
+          scrape_configs:
+            - job_name: 'node'
+              static_configs:
+                - targets:
+                    - '{{ hostvars["web1"]["ansible_default_ipv4"]["address"] }}:9100'
+                    - '{{ hostvars["web2"]["ansible_default_ipv4"]["address"] }}:9100'
+
+            - job_name: 'nginxlog'
+              static_configs:
+                - targets:
+                    - '{{ hostvars["web1"]["ansible_default_ipv4"]["address"] }}:4040'
+                    - '{{ hostvars["web2"]["ansible_default_ipv4"]["address"] }}:4040'
+
+    - name: Run prometheus container with config
+      docker_container:
+        name: prometheus
+        image: prom/prometheus:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "9090:9090"
+        volumes:
+          - /opt/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+- name: Setup Grafana
+  hosts: grafana
+  become: yes
+  tags: grafana
+  tasks:
+    - name: Create grafana directory
+      file:
+        path: /opt/grafana
+        state: directory
+        mode: '0755'
+
+    - name: Run grafana container
+      docker_container:
+        name: grafana
+        image: grafana/grafana:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "3000:3000"
+        env:
+          GF_SECURITY_ADMIN_USER: "admin"
+          GF_SECURITY_ADMIN_PASSWORD: "admin"
+
+# Импорт дашбордов в Grafana (отдельный play)
+- name: Import dashboards to Grafana
+  import_playbook: import_dashboards.yml
+
+- name: Setup Elasticsearch
+  hosts: elasticsearch
+  become: yes
+  tags: elasticsearch
+  tasks:
+    - name: Remove old elasticsearch container if exists
+      docker_container:
+        name: elasticsearch
+        state: absent
+
+    - name: Create Docker volume for Elasticsearch data
+      docker_volume:
+        name: elasticsearch-data
+        state: present
+
+    - name: Increase vm.max_map_count
+      sysctl:
+        name: vm.max_map_count
+        value: '262144'
+        state: present
+        reload: yes
+
+    - name: Run elasticsearch container with volume
+      docker_container:
+        name: elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+        state: started
+        restart_policy: always
+        ports:
+          - "9200:9200"
+          - "9300:9300"
+        env:
+          discovery.type: "single-node"
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+        volumes:
+          - elasticsearch-data:/usr/share/elasticsearch/data
+
+    - name: Wait for Elasticsearch to be ready
+      uri:
+        url: "http://localhost:9200"
+        status_code: 200
+        timeout: 10
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 5
+      ignore_errors: yes
+
+    - name: Show Elasticsearch status
+      debug:
+        msg: "Elasticsearch on {{ inventory_hostname }} is {{ 'ready' if result.status == 200 else 'not ready' }}"
+
+- name: Setup Kibana
+  hosts: kibana
+  become: yes
+  tags: kibana
+  tasks:
+    - name: Remove old kibana container if exists
+      docker_container:
+        name: kibana
+        state: absent
+
+    - name: Create Docker volume for Kibana data
+      docker_volume:
+        name: kibana-data
+        state: present
+
+    - name: Run kibana container with volume
+      docker_container:
+        name: kibana
+        image: docker.elastic.co/kibana/kibana:8.17.0
+        state: started
+        restart_policy: always
+        ports:
+          - "5601:5601"
+        volumes:
+          - kibana-data:/usr/share/kibana/data
+        env:
+          ELASTICSEARCH_HOSTS: "http://{{ elasticsearch_private_ip }}:9200"
+
+    - name: Wait for Kibana to be ready
+      uri:
+        url: "http://localhost:5601"
+        status_code: 200
+        timeout: 10
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 10
+      ignore_errors: yes
+
+    - name: Show Kibana status
+      debug:
+        msg: "Kibana on {{ inventory_hostname }} is {{ 'ready' if result.status == 200 else 'not ready' }}"
+
+# Резервное копирование
+- import_playbook: backup.yml

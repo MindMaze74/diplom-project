@@ -43,3 +43,8 @@ resource "local_file" "ansible_inventory" {
   })
   filename = "../ansible/inventory/inventory.ini"
 }
+
+output "alb_external_ip" {
+  value = yandex_alb_load_balancer.web_lb.listener[0].endpoint[0].address[0].external_ipv4_address[0].address
+  description = "Public IP of Application Load Balancer"
+}

@@ -11,7 +11,7 @@
           "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
           "legendFormat": "{{instance}}",
           "refId": "A",
-          "datasource": "prometheus",
+          "datasource": "Prometheus",
           "interval": "15s"
         }
       ],
@@ -43,7 +43,7 @@
           "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
           "legendFormat": "{{instance}}",
           "refId": "A",
-          "datasource": "prometheus",
+          "datasource": "Prometheus",
           "interval": "15s"
         }
       ],
@@ -75,7 +75,7 @@
           "expr": "100 - ((node_filesystem_avail_bytes{mountpoint=\"/\"} * 100) / node_filesystem_size_bytes{mountpoint=\"/\"})",
           "legendFormat": "{{instance}}",
           "refId": "A",
-          "datasource": "prometheus",
+          "datasource": "Prometheus",
           "interval": "15s"
         }
       ],
@@ -107,7 +107,7 @@
           "expr": "rate(node_network_receive_bytes_total[5m])",
           "legendFormat": "{{instance}}",
           "refId": "A",
-          "datasource": "prometheus",
+          "datasource": "Prometheus",
           "interval": "15s"
         }
       ],
@@ -127,7 +127,7 @@
           "expr": "rate(node_network_transmit_bytes_total[5m])",
           "legendFormat": "{{instance}}",
           "refId": "A",
-          "datasource": "prometheus",
+          "datasource": "Prometheus",
           "interval": "15s"
         }
       ],
@@ -147,7 +147,7 @@
           "expr": "node_load1",
           "legendFormat": "{{instance}}",
           "refId": "A",
-          "datasource": "prometheus",
+          "datasource": "Prometheus",
           "interval": "15s"
         }
       ],

@@ -1,0 +1,90 @@
+---
+- name: Setup S3 backup on Bastion
+  hosts: bastion
+  become: yes
+  vars:
+    bucket_name: "diplom-project-backup-b1g4blc2guo29mqbh6bp"
+    s3_access_key: "{{ lookup('env', 'BACKUP_ACCESS_KEY') }}"
+    s3_secret_key: "{{ lookup('env', 'BACKUP_SECRET_KEY') }}"
+
+  tasks:
+    - name: Fail if access keys are not set
+      fail:
+        msg: |
+          Please set BACKUP_ACCESS_KEY and BACKUP_SECRET_KEY environment variables.
+          Export them from Terraform output:
+          export BACKUP_ACCESS_KEY=$(terraform -chdir=../terraform output -raw backup_access_key)
+          export BACKUP_SECRET_KEY=$(terraform -chdir=../terraform output -raw backup_secret_key)
+      when: s3_access_key == '' or s3_secret_key == ''
+
+    - name: Install awscli
+      apt:
+        name: awscli
+        state: present
+        update_cache: yes
+
+    # Для пользователя ubuntu
+    - name: Ensure .aws directory exists for ubuntu
+      file:
+        path: /home/ubuntu/.aws
+        state: directory
+        mode: '0700'
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Configure AWS credentials for ubuntu
+      copy:
+        dest: /home/ubuntu/.aws/credentials
+        content: |
+          [default]
+          aws_access_key_id = {{ s3_access_key }}
+          aws_secret_access_key = {{ s3_secret_key }}
+        mode: '0600'
+        owner: ubuntu
+        group: ubuntu
+
+    # Для root (чтобы sudo работал)
+    - name: Ensure .aws directory exists for root
+      file:
+        path: /root/.aws
+        state: directory
+        mode: '0700'
+
+    - name: Configure AWS credentials for root
+      copy:
+        dest: /root/.aws/credentials
+        content: |
+          [default]
+          aws_access_key_id = {{ s3_access_key }}
+          aws_secret_access_key = {{ s3_secret_key }}
+        mode: '0600'
+
+    - name: Create backup script
+      copy:
+        dest: /usr/local/bin/s3_backup.sh
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          set -e
+          BACKUP_DIR="/opt/backup"
+          BUCKET_NAME="{{ bucket_name }}"
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          ARCHIVE_NAME="backup_${TIMESTAMP}.tar.gz"
+          ARCHIVE_PATH="/tmp/${ARCHIVE_NAME}"
+
+          tar -czf ${ARCHIVE_PATH} -C ${BACKUP_DIR} .
+
+          aws s3 cp ${ARCHIVE_PATH} s3://${BUCKET_NAME}/${ARCHIVE_NAME} \
+            --endpoint-url=https://storage.yandexcloud.net
+
+          rm -f ${ARCHIVE_PATH}
+
+          echo "Backup ${ARCHIVE_NAME} uploaded to S3 bucket ${BUCKET_NAME}"
+
+    - name: Add cron job for daily S3 backup at 5am
+      cron:
+        name: "Daily S3 backup"
+        minute: "0"
+        hour: "5"
+        job: "/usr/local/bin/s3_backup.sh >> /var/log/s3_backup.log 2>&1"
+        state: present

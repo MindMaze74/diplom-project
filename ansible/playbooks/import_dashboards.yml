@@ -7,6 +7,8 @@
     grafana_url: "http://localhost:3000"
     grafana_user: "admin"
     grafana_password: "admin"
+    prometheus_url: "http://{{ hostvars['prometheus']['ansible_host'] }}:9090"
+
   tasks:
     - name: Wait for Grafana to be ready
       uri:
@@ -18,6 +20,29 @@
       retries: 30
       delay: 5
       ignore_errors: yes
+
+    - name: Create Prometheus datasource (ignore if exists)
+      uri:
+        url: "{{ grafana_url }}/api/datasources"
+        method: POST
+        user: "{{ grafana_user }}"
+        password: "{{ grafana_password }}"
+        force_basic_auth: yes
+        body_format: json
+        body:
+          name: "Prometheus"
+          type: "prometheus"
+          url: "{{ prometheus_url }}"
+          access: "proxy"
+          isDefault: true
+          jsonData:
+            timeInterval: "15s"
+            httpMethod: "POST"
+        status_code: [200, 409]
+      register: create_ds
+      until: create_ds.status in [200, 409]
+      retries: 3
+      delay: 5
 
     - name: Import Node Exporter dashboard
       uri:

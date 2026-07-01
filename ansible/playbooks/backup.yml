@@ -1,52 +1,121 @@
 ---
-- name: Setup free backup via rsync
+- name: Centralized backup via rsync (pull model)
   hosts: all
   become: yes
   gather_facts: yes
+  vars:
+    backup_parent_dir: "/opt/backup"
+    retention_days: 7
+    backup_host: "{{ inventory_hostname }}"
+    backup_local_dir: "{{ backup_parent_dir }}/{{ backup_host }}"
+    backup_bastion_dir: "{{ backup_parent_dir }}/{{ backup_host }}"
 
   tasks:
-    - name: Install rsync
+    - name: Install rsync on all hosts
       apt:
         name: rsync
         state: present
-      when: ansible_os_family == "Debian"
+        update_cache: yes
 
-    - name: Create backup directory on Bastion
+    - name: Create backup parent directory on all hosts
       file:
-        path: /opt/backup
+        path: "{{ backup_parent_dir }}"
         state: directory
         mode: '0755'
-      delegate_to: bastion
-      run_once: true
 
-    - name: Create backup script
+    - name: Create backup script on each non-bastion host (with excludes)
       copy:
         dest: /usr/local/bin/backup.sh
         mode: '0755'
         content: |
           #!/bin/bash
-          #Бэкап через rsync
-          BACKUP_DIR="/opt/backup/$(hostname)/$(date +%Y%m%d)"
-          mkdir -p $BACKUP_DIR
+          set -e
+          BACKUP_DIR="{{ backup_local_dir }}/$(date +%Y%m%d_%H%M%S)"
+          mkdir -p "$BACKUP_DIR"/{etc,var/log,opt,home/ubuntu}
+          rsync -a --delete /etc/ "$BACKUP_DIR/etc/"
+          rsync -a --delete /var/log/ "$BACKUP_DIR/var/log/"
+          # Копируем /opt, исключая тяжёлые и ненужные каталоги
+          rsync -a --delete /opt/ "$BACKUP_DIR/opt/" \
+            --exclude=/opt/backup \
+            --exclude=/opt/containerd \
+            --exclude=/opt/docker \
+            --exclude=/opt/prometheus \
+            --exclude=/opt/grafana \
+            --exclude=/opt/elasticsearch-data \
+            --exclude=/opt/kibana-data
+          rsync -a --delete /home/ubuntu/ "$BACKUP_DIR/home/"
+          # Удаляем старые локальные бэкапы (старше {{ retention_days }} дней)
+          find {{ backup_local_dir }} -maxdepth 1 -type d -name "20*" -mtime +{{ retention_days }} -exec rm -rf {} \; 2>/dev/null
+          echo "Local backup completed at $(date)"
+      when: inventory_hostname != 'bastion'
 
-          # Копируем важные конфигурационные файлы и логи
-          rsync -av --delete /etc/ $BACKUP_DIR/etc/
-          rsync -av --delete /var/log/ $BACKUP_DIR/var/log/
-          rsync -av --delete /opt/ $BACKUP_DIR/opt/
-          rsync -av --delete /home/ubuntu/ $BACKUP_DIR/home/
+    - name: Create cleanup script on Bastion
+      copy:
+        dest: /usr/local/bin/backup_cleanup.sh
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          find {{ backup_parent_dir }} -mindepth 2 -type d -name "20*" -mtime +{{ retention_days }} -exec rm -rf {} \; 2>/dev/null
+          echo "Cleanup completed at $(date)"
+      when: inventory_hostname == 'bastion'
 
-          # Создаём символическую ссылку на последний бэкап
-          ln -sfn $BACKUP_DIR /opt/backup/$(hostname)/latest
+    - name: Run local backup script on all non-bastion hosts
+      shell: /usr/local/bin/backup.sh
+      when: inventory_hostname != 'bastion'
+      register: backup_result
+      changed_when: "'completed' in backup_result.stdout"
 
-          # Очищаем бэкапы старше 7 дней
-          find /opt/backup/$(hostname) -type d -name "20*" -mtime +7 -exec rm -rf {} \; 2>/dev/null
+    - name: Ensure per-host backup directories exist on Bastion
+      file:
+        path: "{{ backup_bastion_dir }}"
+        state: directory
+        mode: '0755'
+      delegate_to: bastion
+      when: inventory_hostname != 'bastion'
 
-          echo "Backup completed for $(hostname) at $(date)" >> /var/log/backup.log
+    - name: Pull backups from each host to Bastion (with delete)
+      synchronize:
+        src: "{{ backup_local_dir }}/"
+        dest: "{{ backup_bastion_dir }}/"
+        mode: pull
+        rsync_opts:
+          - "--remove-source-files"
+          - "--delete"
+      delegate_to: bastion
+      when: inventory_hostname != 'bastion'
+      register: sync_result
+      changed_when: "'synchronize' in sync_result.stdout"
 
-    - name: Add cron job for daily backup at 2am
+    - name: Run cleanup on Bastion
+      shell: /usr/local/bin/backup_cleanup.sh
+      when: inventory_hostname == 'bastion'
+      changed_when: false
+
+    - name: Add cron job for daily backup at 2am (on all non-bastion hosts)
       cron:
-        name: "Daily backup"
+        name: "Daily local backup"
         minute: "0"
         hour: "2"
-        job: "/usr/local/bin/backup.sh"
+        job: "/usr/local/bin/backup.sh >> /var/log/backup.log 2>&1"
         state: present
+      when: inventory_hostname != 'bastion'
+
+    - name: Add cron job for pulling backups to Bastion at 3am (on Bastion)
+      cron:
+        name: "Pull backups to Bastion"
+        minute: "0"
+        hour: "3"
+        job: "ansible-playbook -i /home/ubuntu/diplom-test-alb/ansible/inventory/inventory.ini /home/ubuntu/diplom-test-alb/ansible/playbooks/backup.yml --tags pull"
+        state: present
+      delegate_to: bastion
+      when: inventory_hostname == 'bastion'
+
+    - name: Add cron job for cleaning old backups on Bastion at 4am
+      cron:
+        name: "Cleanup old backups"
+        minute: "0"
+        hour: "4"
+        job: "/usr/local/bin/backup_cleanup.sh >> /var/log/cleanup.log 2>&1"
+        state: present
+      delegate_to: bastion
+      when: inventory_hostname == 'bastion'
